@@ -1,0 +1,84 @@
+#include "network_sensors.h"
+#include "globals.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+// Check Backend for Manual Control Overrides
+void checkBackendOverride() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(overrideUrl);
+    int httpResponseCode = http.GET();
+    if (httpResponseCode == 200) {
+      String payload = http.getString();
+      StaticJsonDocument<256> doc;
+      DeserializationError error = deserializeJson(doc, payload);
+      if (!error) {
+        currentMode = doc["mode"].as<String>();
+        manualPump1 = doc["pump1"].as<bool>();
+        manualPump2 = doc["pump2"].as<bool>();
+        manualShade = doc["shade"].as<bool>(); // Parse shade override from backend payload
+        manualSprinkler = doc["sprinkler"].as<bool>(); // Parse sprinkler override from backend payload
+      }
+    }
+    http.end();
+  }
+}
+
+// Helper function to read and print environmental sensors
+void printEnvironmentSensors() {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  int ldrValue = analogRead(LDR_PIN);
+  int rainValue = analogRead(RAIN_PIN);
+
+  Serial.println("\n--- Environment Status ---");
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor! Check wiring.");
+  } else {
+    Serial.print("Temperature: "); Serial.print(t); Serial.print("°C | ");
+    Serial.print("Humidity: "); Serial.print(h); Serial.println("%");
+  }
+  
+  Serial.print("LDR Light Value: "); Serial.println(ldrValue);
+  Serial.print("Rain Sensor Value: "); Serial.println(rainValue);
+  Serial.print("Current Target Volume: "); Serial.println(targetVolume);
+  Serial.println("--------------------------\n");
+}
+
+// Function to send data to FastAPI backend
+void sendSensorDataToBackend(float temp, float hum, int ldr, int cap, int rain, int depth, float flow) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(backendUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    StaticJsonDocument<256> doc;
+    doc["node_id"] = "esp32_zone_1";
+    doc["temperature"] = isnan(temp) ? 0.0 : temp;
+    doc["humidity"] = isnan(hum) ? 0.0 : hum;
+    
+    doc["ldr"] = ldr;
+    doc["soil_moisture"] = cap; 
+    doc["rain_level"] = rain;
+    doc["depth_level"] = depth;
+    doc["water_flow"] = flow;
+    doc["last_cycle_volume"] = lastCycleVolume;
+
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpResponseCode = http.POST(requestBody);
+    if (httpResponseCode > 0) {
+      Serial.print("Data sent successfully. HTTP Response code: ");
+      Serial.println(httpResponseCode);
+    } else {
+      Serial.print("Error sending data. HTTP Error code: ");
+      Serial.println(httpResponseCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected. Cannot send data.");
+  }
+}
