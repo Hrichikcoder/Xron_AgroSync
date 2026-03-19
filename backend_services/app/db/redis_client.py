@@ -5,7 +5,8 @@ from app.core.config import settings
 redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 def set_cache(key: str, data: dict, expire: int = 3600):
-    redis_client.setex(key, expire, json.dumps(data))
+    # Add default=str to handle pandas Timestamps
+    redis_client.setex(key, expire, json.dumps(data, default=str))
 
 def get_cache(key: str):
     data = redis_client.get(key)

@@ -60,17 +60,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.notifications_active_rounded, color: Colors.white),
+            const Icon(Icons.notifications_active_rounded, color: Color(0xFF064E3B)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 "New notification received".tr,
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF064E3B)),
               ),
             ),
           ],
         ),
-        backgroundColor: Colors.greenAccent.shade700,
+        backgroundColor: const Color(0xFFE8F5E9),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key="AIzaSyCHiVS5oAvAomhjNQ7f_LSkiYiiil3NtoI")
+client = genai.Client(api_key="AIzaSyAch8pw_39y8Zt0mNuE5Iko5NqxDwpRQ-I")
 
 router = APIRouter(tags=["Disease Prediction"])
 
@@ -54,27 +54,36 @@ async def get_recommendations(request: Request):
     data = await request.json()
     crop = data.get("current_crop", "Unknown")
     lang_code = data.get("language", "en")
+    location = data.get("location", "Unknown Location")
+    season = data.get("season", "Unknown Season")
     target_language = LANGUAGE_MAP.get(lang_code, "English")
     
     prompt = f"""
     You are an expert agronomist AI. The farmer has just finished growing '{crop}'.
-    First, analyze how '{crop}' affects soil nutrients (what it heavily depletes and what it leaves behind or fixes).
-    Then, based on this specific nutrient profile, recommend the best NEXT crops for rotation that will naturally replenish the soil, along with a fertilizer strategy.
+    Farmer's Location: {location}
+    Current Season: {season}
     
-    CRITICAL LANGUAGE INSTRUCTION: You must write all textual content (descriptions, titles, analysis) entirely in {target_language}. Keep the exact JSON keys in English, but translate all values into {target_language}.
+    CRITICAL GEOGRAPHICAL INSTRUCTION: You MUST strictly tailor all recommendations to the climate, typical soil profile, and water availability of '{location}'. (e.g., Do not recommend water-heavy crops in arid regions like Rajasthan).
+    
+    First, provide a PROBABILISTIC soil condition analysis. Estimate the expected state of the soil after '{crop}' in {location}.
+    Then, based strictly on this expected soil state and the regional viability of {location} during {season}, recommend the best NEXT crops and fertilizers.
+    
+    CRITICAL INSTRUCTIONS: 
+    1. EXCELLENT FORMATTING: Use Markdown formatting (**bolding**). Keep descriptions crisp.
+    2. Write all textual content entirely in {target_language}. Keep the exact JSON keys in English.
     
     Return ONLY a valid JSON object with this exact structure:
     {{
-      "nutrient_analysis": "A brief, 2-sentence explanation in {target_language} of how '{crop}' impacted the soil.",
+      "nutrient_analysis": "A brief, probabilistic explanation in {target_language} using Markdown of the expected soil condition (e.g., 'There is a high probability of Nitrogen depletion...').",
       "next_crops": [
         {{
             "title": "Crop Name in {target_language}", 
-            "desc": "How this crop interacts with the soil left behind, written in {target_language}.",
-            "key_benefit": "Short tag in {target_language} (e.g., 'Fixes Nitrogen')"
+            "desc": "Why this crop survives specifically in {location} during {season} and fixes the expected soil deficit. Use Markdown.",
+            "key_benefit": "Short tag in {target_language}"
         }}
       ],
       "fertilizers": [
-        {{"title": "Fertilizer Name in {target_language}", "desc": "Usage instructions in {target_language}"}}
+        {{"title": "Fertilizer Name in {target_language}", "desc": "Usage instructions tailored for {location} using Markdown."}}
       ]
     }}
     """
@@ -83,12 +92,9 @@ async def get_recommendations(request: Request):
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        cleaned_text = clean_json_response(response.text)
-        return json.loads(cleaned_text)
+        return json.loads(clean_json_response(response.text))
     except Exception as e:
         print(f"Recommendations Error: {e}")
         return {"nutrient_analysis": "", "next_crops": [], "fertilizers": []}
@@ -96,35 +102,47 @@ async def get_recommendations(request: Request):
 
 @router.post("/api/consult_ai")
 async def consult_ai(request: Request):
-    import datetime
     data = await request.json()
     current_crop = data.get("current_crop")
     query_type = data.get("query_type")
     user_query = data.get("user_query")
+    chat_history = data.get("chat_history", []) 
     lang_code = data.get("language", "en")
+    location = data.get("location", "Unknown Location")
+    season = data.get("season", "Unknown Season")
     target_language = LANGUAGE_MAP.get(lang_code, "English")
     
-    current_month = datetime.datetime.now().strftime("%B")
+    history_text = ""
+    if chat_history:
+        history_text = "PREVIOUS CONVERSATION HISTORY:\n"
+        for msg in chat_history:
+            role = "Farmer" if msg.get("role") == "user" else "AI"
+            history_text += f"{role}: {msg.get('content')}\n"
+        history_text += "\n"
     
     prompt = f"""
-    You are an expert agronomist and soil scientist providing a highly specific, scientific consultation.
-    Current Month: {current_month}
+    You are an expert agronomist providing a highly specific consultation.
+    Farmer's Location: {location}
+    Current Season: {season}
     Previous/Current Crop: '{current_crop}'
-    Farmer's proposed idea: "{user_query}"
     Query Focus: {query_type}
     
-    CRITICAL INSTRUCTIONS TO AVOID GENERIC RESPONSES:
-    1. NO FILLER: Do not start with generic phrases. Dive immediately into the science.
-    2. CHEMICAL SPECIFICITY: Explicitly name the exact nutrients that '{current_crop}' depleted from the soil, and state EXACTLY how the proposed crop/fertilizer interacts with that deficit.
-    3. BIOLOGICAL SPECIFICITY: Name specific pests or diseases that share a host bridge.
-    4. SEASONAL ACCURACY: Evaluate if the proposed idea is viable right now given that it is {current_month}.
-    5. LANGUAGE: You MUST write your entire response (feedback and better_alternative) natively in {target_language}. Keep the JSON keys in English, but all values must be in {target_language}.
+    {history_text}
+    Farmer's latest message: "{user_query}"
+    
+    CRITICAL INSTRUCTIONS:
+    1. INTENT PARSING: Determine if the farmer is asking an open-ended question ("What is best?") or proposing an idea to validate ("Can I use urea?").
+    2. CRISP AND CONCISE: Maximum of 3 short bullet points.
+    3. EXCELLENT FORMATTING: You MUST use Markdown. Use **bold text** for emphasis. 
+    4. LOCATION/SEASON ACCURACY: Advice MUST be viable for {season} in {location}.
+    5. LANGUAGE: Write natively in {target_language}. Keep JSON keys in English.
     
     Return ONLY a valid JSON object with this exact structure:
     {{
-      "is_good": true or false,
-      "feedback": "Direct, hyper-specific explanation in {target_language} focusing on exact soil chemistry, nutrient transfer, pest cycles, and seasonal timing. Use markdown formatting.",
-      "better_alternative": "A highly specific, data-backed alternative crop or exact fertilizer formulation in {target_language} if their idea is sub-optimal. Otherwise, return null."
+      "response_type": "success" | "warning" | "info", 
+      "heading": "A short, dynamic 2-4 word heading in {target_language} (e.g., 'Safe Strategy', 'High Risk', 'Top Recommendation')",
+      "feedback": "Crisp, Markdown-formatted explanation in {target_language}.",
+      "better_alternative": "If their idea is sub-optimal, provide a highly specific alternative in {target_language} using Markdown. YOU MUST BRIEFLY EXPLAIN WHY this alternative is better suited for the soil, {location}, and {season}. Otherwise, return null."
     }}
     """
     
@@ -132,16 +150,9 @@ async def consult_ai(request: Request):
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
-        cleaned_text = clean_json_response(response.text)
-        return json.loads(cleaned_text)
+        return json.loads(clean_json_response(response.text))
     except Exception as e:
         print(f"Consult AI Error: {e}")
-        return {
-            "is_good": False,
-            "feedback": f"The AI service is currently unavailable. Error: {str(e)}",
-            "better_alternative": None
-        }
+        return {"response_type": "warning", "heading": "Error", "feedback": f"Error: {str(e)}", "better_alternative": None}

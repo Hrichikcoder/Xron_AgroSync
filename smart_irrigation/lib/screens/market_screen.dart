@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:ui';
+import 'package:flutter/foundation.dart'; // REQUIRED FOR kIsWeb
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
@@ -87,10 +88,11 @@ class _MarketScreenState extends State<MarketScreen> {
     }
   }
 
+  // Uses the robust logic from the uploaded code (including Web Fallback)
   Future<void> _fetchDeviceLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      setState(() => currentLocation = "GPS Disabled");
+      if (mounted) setState(() => currentLocation = "GPS Disabled");
       return;
     }
 
@@ -98,58 +100,90 @@ class _MarketScreenState extends State<MarketScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        setState(() => currentLocation = "Permission Denied");
+        if (mounted) setState(() => currentLocation = "Permission Denied");
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      setState(() => currentLocation = "Permission Denied Forever");
+      if (mounted) setState(() => currentLocation = "Permission Denied Forever");
       return;
     }
 
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    setState(() {
-      farmerLat = position.latitude;
-      farmerLon = position.longitude;
-    });
-
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        farmerLat,
-        farmerLon,
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
 
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks[0];
-
-        List<String> addressParts = [];
-        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
-          addressParts.add(place.subLocality!);
-        }
-        if (place.locality != null && place.locality!.isNotEmpty) {
-          addressParts.add(place.locality!);
-        }
-
-        if (addressParts.isEmpty) {
-          if (place.street != null && place.street!.isNotEmpty) {
-            addressParts.add(place.street!);
-          } else if (place.administrativeArea != null) {
-            addressParts.add(place.administrativeArea!);
-          }
-        }
-
+      if (mounted) {
         setState(() {
-          currentLocation = addressParts.isNotEmpty
-              ? addressParts.join(", ")
-              : "Location Found";
+          farmerLat = position.latitude;
+          farmerLon = position.longitude;
         });
       }
+
+      if (kIsWeb) {
+        // WEB FALLBACK: Use OpenStreetMap API
+        try {
+          final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=10&addressdetails=1');
+          final response = await http.get(url, headers: {'User-Agent': 'AgroPulseApp/1.0'});
+          
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            final address = data['address'] ?? {};
+            String city = address['city'] ?? address['town'] ?? address['state_district'] ?? 'Unknown City';
+            String state = address['state'] ?? '';
+            
+            if (mounted) {
+              setState(() {
+                currentLocation = "$city, $state".replaceAll(RegExp(r',$'), '').trim();
+              });
+            }
+            return;
+          }
+        } catch (apiError) {
+          debugPrint("OSM Web Geocoding error: $apiError");
+        }
+        
+        // If OSM fails, show raw coordinates
+        if (mounted) {
+          setState(() => currentLocation = "Lat: ${position.latitude.toStringAsFixed(2)}, Lon: ${position.longitude.toStringAsFixed(2)}");
+        }
+
+      } else {
+        // MOBILE LOGIC: Standard Geocoding
+        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+
+          List<String> addressParts = [];
+          if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+            addressParts.add(place.subLocality!);
+          }
+          if (place.locality != null && place.locality!.isNotEmpty) {
+            addressParts.add(place.locality!);
+          }
+
+          if (addressParts.isEmpty) {
+            if (place.street != null && place.street!.isNotEmpty) {
+              addressParts.add(place.street!);
+            } else if (place.administrativeArea != null) {
+              addressParts.add(place.administrativeArea!);
+            }
+          }
+
+          if (mounted) {
+            setState(() {
+              currentLocation = addressParts.isNotEmpty
+                  ? addressParts.join(", ")
+                  : "Location Found";
+            });
+          }
+        }
+      }
     } catch (e) {
-      setState(() => currentLocation = "Location Acquired");
+      if (mounted) setState(() => currentLocation = "Location Unavailable");
     }
   }
 

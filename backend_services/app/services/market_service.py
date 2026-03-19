@@ -69,7 +69,6 @@ def get_real_market_features(target_crop):
     # Store as a list of dicts so redis_client.set_cache can dump it properly
     set_cache(cache_key, crop_df.to_dict(orient='records'), expire=1800) 
     return crop_df
-
 def recommend_real_markets(crop, farmer_lat, farmer_lon, transport_cost_per_km):
     try:
         expected_features = market_model.feature_names_in_
@@ -78,19 +77,35 @@ def recommend_real_markets(crop, farmer_lat, farmer_lon, transport_cost_per_km):
         
     latest_data = get_real_market_features(crop)
     if latest_data.empty: return pd.DataFrame()
+    
+    # Pre-filter using local Haversine distance
+    latest_data['straight_distance'] = latest_data.apply(
+        lambda row: haversine_distance(farmer_lat, farmer_lon, row['Latitude'], row['Longitude']) 
+        if pd.notnull(row.get('Latitude')) and pd.notnull(row.get('Longitude')) else 99999, 
+        axis=1
+    )
+    
+    # --- FIX 1: Only keep the top 5 closest markets (instead of 10) ---
+    closest_markets = latest_data.nsmallest(5, 'straight_distance')
         
     predictions = []
-    for index, row in latest_data.iterrows():
+    for index, row in closest_markets.iterrows():
         feature_vector = row.reindex(expected_features).to_frame().T.astype(float).fillna(0)
         pred_price = market_model.predict(feature_vector)[0]
         
         m_lat, m_lon = row.get('Latitude'), row.get('Longitude')
         
+        safe_lat = float(m_lat) if pd.notnull(m_lat) else None
+        safe_lon = float(m_lon) if pd.notnull(m_lon) else None
+        
         # OSRM Driving Route Calculation
-        if pd.notnull(m_lat) and pd.notnull(m_lon):
-            distance_km, travel_time = get_driving_route_osrm(farmer_lat, farmer_lon, m_lat, m_lon)
+        if safe_lat is not None and safe_lon is not None and row['straight_distance'] != 99999:
+            distance_km, travel_time = get_driving_route_osrm(farmer_lat, farmer_lon, safe_lat, safe_lon)
+            
+            # --- FIX 2: Add a 0.3 second pause to bypass OSRM spam filters ---
+            time.sleep(0.3) 
         else:
-            distance_km, travel_time = 50.0, None # Default fallback
+            distance_km, travel_time = row['straight_distance'], None # Default fallback
             
         total_transport_cost = distance_km * transport_cost_per_km
         net_profit = pred_price - total_transport_cost
@@ -107,13 +122,16 @@ def recommend_real_markets(crop, farmer_lat, farmer_lon, transport_cost_per_km):
             "Transport Cost (Rs)": round(total_transport_cost, 2),
             "Net Profit (Rs)": round(float(net_profit), 2),
             "Confidence Score": f"{round(max(0, min(100, 100 - (distance_km * 0.05))), 1)}%",
-            "market_lat": m_lat,
-            "market_lon": m_lon
+            "market_lat": safe_lat,
+            "market_lon": safe_lon 
         })
         
     results_df = pd.DataFrame(predictions)
+    
+    results_df = results_df.replace({pd.NA: None, float('nan'): None})
+    
     return results_df.sort_values(by="Net Profit (Rs)", ascending=False).head(3)
-
+    
 def update_market_summary_cache():
     default_crops = ["Wheat", "Soyabean", "Maize", "Rice", "Cotton", "Sugarcane", "Potato", "Onion", "Tomato", "Apple"]
     summary_data = []

@@ -101,14 +101,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  BoxDecoration _greenCardDecoration(bool isDark) {
+  BoxDecoration _greenCardDecoration(bool isDark, bool isDay) {
     return BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: isDark
-            ? [const Color(0xFF0C382A), const Color(0xFF062319)]
-            : [const Color(0xFF1E6B52), const Color(0xFF114F3A)],
+        colors: isDay
+            ? [const Color(0xFF22C55E), const Color(0xFF15803D)]
+            : [const Color(0xFF047857), const Color(0xFF064E3B)],
       ),
       borderRadius: BorderRadius.circular(24),
       border: Border.all(
@@ -117,7 +117,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
       ),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF1E6B52).withOpacity(isDark ? 0.3 : 0.2),
+          color: (isDay ? const Color(0xFF15803D) : const Color(0xFF064E3B)).withOpacity(isDark ? 0.3 : 0.2),
           blurRadius: 25,
           spreadRadius: -5,
           offset: const Offset(0, 10),
@@ -606,7 +606,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Widget _buildRealWeatherCard(bool isDark, bool isDay) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: _greenCardDecoration(isDark),
+      decoration: _greenCardDecoration(isDark, isDay),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -752,7 +752,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildSystemPowerCard(bool isDark) {
+  Widget _buildSystemPowerCard(bool isDark, bool isDay) {
     return BouncingButton(
       onTap: () {
         setState(() {
@@ -762,7 +762,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 400),
         padding: const EdgeInsets.all(20),
-        decoration: _isSystemOn ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        decoration: _isSystemOn ? _greenCardDecoration(isDark, isDay) : _glassCardDecoration(isDark),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -814,10 +814,10 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildFieldSelector(bool isDark) {
+  Widget _buildFieldSelector(bool isDark, bool isDay) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: _greenCardDecoration(isDark),
+      decoration: _greenCardDecoration(isDark, isDay),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -848,7 +848,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               child: DropdownButton<String>(
                 value: _selectedField,
                 isExpanded: true,
-                dropdownColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                dropdownColor: isDark ? const Color(0xFF0F172A) : const Color(0xFF15803D),
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
                 style: const TextStyle(
                   fontSize: 15,
@@ -860,7 +860,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     value: field,
                     child: Text(
                       field, 
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87)
+                      style: const TextStyle(color: Colors.white)
                     ),
                   );
                 }).toList(),
@@ -893,7 +893,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildShadeControlCard(bool isDark) {
+  Widget _buildShadeControlCard(bool isDark, bool isDay) {
     return BouncingButton(
       onTap: () {
         if (!_shadeOverride) {
@@ -906,7 +906,25 @@ class _SensorsScreenState extends State<SensorsScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 400),
         padding: const EdgeInsets.all(20),
-        decoration: isShadeDeployed ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        decoration: isShadeDeployed 
+            ? BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)], // Vibrant light green glow gradient
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6EE7B7).withOpacity(0.6), // Glowing effect
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ) 
+            : _glassCardDecoration(isDark),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -916,23 +934,23 @@ class _SensorsScreenState extends State<SensorsScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isShadeDeployed ? Colors.white.withOpacity(0.8) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                color: isShadeDeployed ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
                 letterSpacing: 0.5,
               ),
             ),
             const Spacer(),
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: 50,
-              height: 50,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isShadeDeployed ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade800 : Colors.white),
-                boxShadow: isShadeDeployed ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)] : [],
+                color: isShadeDeployed ? const Color(0xFF022C22) : (isDark ? Colors.grey.shade800 : Colors.white),
+                boxShadow: isShadeDeployed ? [BoxShadow(color: const Color(0xFF022C22).withOpacity(0.2), blurRadius: 10)] : [],
               ),
               child: Icon(
                 Icons.roofing_rounded,
-                size: 24,
+                size: 36,
                 color: isShadeDeployed ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
               ),
             ),
@@ -943,7 +961,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
-                color: isShadeDeployed ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color,
+                color: isShadeDeployed ? const Color(0xFF064E3B) : Theme.of(context).textTheme.bodyLarge!.color,
               ),
             ),
           ],
@@ -952,7 +970,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildSprinklerControlCard(bool isDark) {
+  Widget _buildSprinklerControlCard(bool isDark, bool isDay) {
     return BouncingButton(
       onTap: () {
         _updatePumpControl(_pumpMode, _pump1State, _pump2State, isShadeDeployed, !isSprinklerActive);
@@ -960,7 +978,25 @@ class _SensorsScreenState extends State<SensorsScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 400),
         padding: const EdgeInsets.all(20),
-        decoration: isSprinklerActive ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        decoration: isSprinklerActive 
+            ? BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)], // Vibrant light green glow gradient
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6EE7B7).withOpacity(0.6), // Glowing effect
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ) 
+            : _glassCardDecoration(isDark),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -970,23 +1006,23 @@ class _SensorsScreenState extends State<SensorsScreen> {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: isSprinklerActive ? Colors.white.withOpacity(0.8) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                color: isSprinklerActive ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
                 letterSpacing: 0.5,
               ),
             ),
             const Spacer(),
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: 50,
-              height: 50,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSprinklerActive ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade800 : Colors.white),
-                boxShadow: isSprinklerActive ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)] : [],
+                color: isSprinklerActive ? const Color(0xFF022C22) : (isDark ? Colors.grey.shade800 : Colors.white),
+                boxShadow: isSprinklerActive ? [BoxShadow(color: const Color(0xFF022C22).withOpacity(0.2), blurRadius: 10)] : [],
               ),
               child: Icon(
                 Icons.shower_rounded,
-                size: 24,
+                size: 36,
                 color: isSprinklerActive ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
               ),
             ),
@@ -997,7 +1033,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
-                color: isSprinklerActive ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color,
+                color: isSprinklerActive ? const Color(0xFF064E3B) : Theme.of(context).textTheme.bodyLarge!.color,
               ),
             ),
           ],
@@ -1006,11 +1042,11 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildIrrigationControlArea(bool isDark) {
+  Widget _buildIrrigationControlArea(bool isDark, bool isDay) {
     bool isAuto = _pumpMode == 'auto';
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: _greenCardDecoration(isDark),
+      decoration: _greenCardDecoration(isDark, isDay),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -1670,9 +1706,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
                                   flex: 3,
                                   child: Column(
                                     children: [
-                                      SizedBox(height: 200, child: _buildSystemPowerCard(isDark)),
+                                      SizedBox(height: 200, child: _buildSystemPowerCard(isDark, isDay)),
                                       const SizedBox(height: 16),
-                                      SizedBox(height: 200, child: _buildFieldSelector(isDark)),
+                                      SizedBox(height: 200, child: _buildFieldSelector(isDark, isDay)),
                                     ],
                                   ),
                                 ),
@@ -1683,13 +1719,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
                                     children: [
                                       Row(
                                         children: [
-                                          Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark))),
+                                          Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark, isDay))),
                                           const SizedBox(width: 16),
-                                          Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark))),
+                                          Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark, isDay))),
                                         ],
                                       ),
                                       const SizedBox(height: 16),
-                                      SizedBox(height: 200, child: _buildIrrigationControlArea(isDark)),
+                                      SizedBox(height: 200, child: _buildIrrigationControlArea(isDark, isDay)),
                                     ],
                                   ),
                                 ),
@@ -1702,19 +1738,19 @@ class _SensorsScreenState extends State<SensorsScreen> {
                             )
                           : Column(
                               children: [
-                                SizedBox(height: 200, child: _buildSystemPowerCard(isDark)),
+                                SizedBox(height: 200, child: _buildSystemPowerCard(isDark, isDay)),
                                 const SizedBox(height: 16),
-                                SizedBox(height: 200, child: _buildFieldSelector(isDark)),
+                                SizedBox(height: 200, child: _buildFieldSelector(isDark, isDay)),
                                 const SizedBox(height: 16),
                                 Row(
                                   children: [
-                                    Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark))),
+                                    Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark, isDay))),
                                     const SizedBox(width: 16),
-                                    Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark))),
+                                    Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark, isDay))),
                                   ],
                                 ),
                                 const SizedBox(height: 16),
-                                SizedBox(height: 200, child: _buildIrrigationControlArea(isDark)),
+                                SizedBox(height: 200, child: _buildIrrigationControlArea(isDark, isDay)),
                                 const SizedBox(height: 16),
                                 _buildRealWeatherCard(isDark, isDay), 
                               ],
