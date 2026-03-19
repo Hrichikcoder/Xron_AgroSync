@@ -407,7 +407,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.medical_services_rounded),
-                label: 'Crop Dr'.tr,
+                label: 'Crop Doctor'.tr,
               ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.storefront_rounded),
