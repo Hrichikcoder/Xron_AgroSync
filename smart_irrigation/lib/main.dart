@@ -2,12 +2,31 @@ import 'package:flutter/material.dart';
 import 'core/globals.dart';
 import 'screens/splash_screen.dart';
 
+class AppNotification {
+  final String id;
+  final String title;
+  final String message;
+  final DateTime timestamp;
+  bool isRead;
+
+  AppNotification({
+    required this.id,
+    required this.title,
+    required this.message,
+    required this.timestamp,
+    this.isRead = false,
+  });
+}
+
 void main() {
   runApp(const SmartIrrigationApp());
 }
 
 class SmartIrrigationApp extends StatelessWidget {
   const SmartIrrigationApp({super.key});
+
+  static final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+  static final ValueNotifier<List<AppNotification>> notificationsNotifier = ValueNotifier([]);
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +50,7 @@ class SmartIrrigationApp extends StatelessWidget {
                       brightness: Brightness.light,
                       surface: Colors.white,
                     ),
-                    scaffoldBackgroundColor: const Color(0xFFF3F4F6),
+                    scaffoldBackgroundColor: const Color(0xFFF1F5F9),
                     fontFamily: 'Roboto',
                   ),
                   darkTheme: ThemeData(
@@ -40,9 +59,9 @@ class SmartIrrigationApp extends StatelessWidget {
                     colorScheme: ColorScheme.fromSeed(
                       seedColor: const Color(0xFF10B981),
                       brightness: Brightness.dark,
-                      surface: const Color(0xFF1A2235),
+                      surface: const Color(0xFF1E293B),
                     ),
-                    scaffoldBackgroundColor: const Color(0xFF0B0F19),
+                    scaffoldBackgroundColor: const Color(0xFF0F172A),
                     fontFamily: 'Roboto',
                   ),
                   home: const SplashScreen(),

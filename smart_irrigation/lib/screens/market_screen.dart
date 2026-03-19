@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:url_launcher/url_launcher.dart'; // REQUIRED FOR GOOGLE MAPS ROUTING
+import 'package:url_launcher/url_launcher.dart';
 import '../core/translations.dart';
 import '../widgets/agro_pulse_loader.dart';
 import '../widgets/fade_in_slide.dart';
@@ -32,6 +33,26 @@ class _MarketScreenState extends State<MarketScreen> {
   bool isHubLoading = false;
   String? selectedHubCrop;
   Map<String, dynamic>? optimalHub;
+
+  Offset _mousePosition = Offset.zero;
+
+  BoxDecoration _cardDecoration(bool isDark, {double radius = 24}) {
+    return BoxDecoration(
+      color: isDark ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.5),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
@@ -213,7 +234,7 @@ class _MarketScreenState extends State<MarketScreen> {
       "crop": displayCrop,
       "price": newPrice,
       "trend": "+0.0%",
-      "color": Colors.blue,
+      "color": Colors.blueAccent,
       "detail": "Custom crop added by user. Real-time API tracked.",
     };
 
@@ -252,61 +273,76 @@ class _MarketScreenState extends State<MarketScreen> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Text(
-            "Add Custom Crop".tr,
-            style: TextStyle(
-              color: Theme.of(context).textTheme.bodyLarge!.color,
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF0F172A).withOpacity(0.85) : const Color(0xFFF1F5F9).withOpacity(0.9),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6)),
             ),
-          ),
-          content: TextField(
-            controller: cropInputController,
-            decoration: InputDecoration(
-              hintText: "e.g., Barley, Brinjal...".tr,
-              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-              filled: true,
-              fillColor: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+            title: Text(
+              "Add Custom Crop".tr,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge!.color,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                "Cancel".tr,
-                style: TextStyle(color: Colors.grey.shade500),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            content: TextField(
+              controller: cropInputController,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+              decoration: InputDecoration(
+                hintText: "e.g., Barley, Brinjal...".tr,
+                hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                filled: true,
+                fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
                 ),
-              ),
-              onPressed: () {
-                if (cropInputController.text.trim().isNotEmpty) {
-                  Navigator.pop(context);
-                  _addNewCrop(cropInputController.text.trim());
-                }
-              },
-              child: Text(
-                "Add".tr,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.blueAccent.shade400),
                 ),
               ),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  "Cancel".tr,
+                  style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent.shade400,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  if (cropInputController.text.trim().isNotEmpty) {
+                    Navigator.pop(context);
+                    _addNewCrop(cropInputController.text.trim());
+                  }
+                },
+                child: Text(
+                  "Add".tr,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -327,7 +363,7 @@ class _MarketScreenState extends State<MarketScreen> {
             "crop": item["crop"],
             "price": (item["price"] * 100).round(), 
             "trend": item["trend"],
-            "color": Colors.blue,
+            "color": Colors.blueAccent,
             "detail": item["detail"],
           };
         }).toList();
@@ -386,130 +422,133 @@ class _MarketScreenState extends State<MarketScreen> {
 
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "${market['Market']}${' Hub'.tr}",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  color: Theme.of(context).textTheme.bodyLarge!.color,
-                ),
-              ),
-              Text(
-                "${market['State']} • ${market['Distance (km)']} km away • ⏱ ${market['Travel Time'] ?? 'Unknown'}",
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildBreakdownRow(
-                "Expected Price (per kg)".tr,
-                "₹${(market['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)}",
-                isDark,
-                isPositive: true,
-              ),
-              const SizedBox(height: 12),
-              _buildBreakdownRow(
-                "Est. Transport (per kg)".tr,
-                "- ₹${(market['Transport Cost (Rs)'] / 100).toStringAsFixed(2)}",
-                isDark,
-                isPositive: false,
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12.0),
-                child: Divider(),
-              ),
-              _buildBreakdownRow(
-                "Net Profit (per kg)".tr,
-                "₹${(market['Net Profit (Rs)'] / 100).toStringAsFixed(2)}",
-                isDark,
-                isTotal: true,
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.blue.withOpacity(0.1)
-                      : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 16,
-                      color: Colors.blue.shade400,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "AI Confidence Score".tr,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? Colors.blue.shade200
-                              : Colors.blue.shade800,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      "${market['Confidence Score']}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Colors.blue.shade500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (hasLocation) ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.directions_car),
-                    label: Text(
-                      "Navigate in Maps".tr,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () {
-                      _launchGoogleMaps(market['market_lat'], market['market_lon']);
-                    },
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: AlertDialog(
+            backgroundColor: isDark ? const Color(0xFF0F172A).withOpacity(0.85) : const Color(0xFFF1F5F9).withOpacity(0.9),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: BorderSide(color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6)),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "${market['Market']}${' Hub'.tr}",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Theme.of(context).textTheme.bodyLarge!.color,
                   ),
                 ),
-              ]
+                Text(
+                  "${market['State']} • ${market['Distance (km)']} km away • ⏱ ${market['Travel Time'] ?? 'Unknown'}",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildBreakdownRow(
+                  "Expected Price (per kg)".tr,
+                  "₹${(market['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)}",
+                  isDark,
+                  isPositive: true,
+                ),
+                const SizedBox(height: 12),
+                _buildBreakdownRow(
+                  "Est. Transport (per kg)".tr,
+                  "- ₹${(market['Transport Cost (Rs)'] / 100).toStringAsFixed(2)}",
+                  isDark,
+                  isPositive: false,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  child: Divider(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+                ),
+                _buildBreakdownRow(
+                  "Net Profit (per kg)".tr,
+                  "₹${(market['Net Profit (Rs)'] / 100).toStringAsFixed(2)}",
+                  isDark,
+                  isTotal: true,
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.blueAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? Colors.blueAccent.withOpacity(0.3) : Colors.blueAccent.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        Icons.auto_awesome,
+                        size: 18,
+                        color: Colors.blueAccent.shade400,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "AI Confidence Score".tr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.blueAccent.shade100 : Colors.blueAccent.shade700,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        "${market['Confidence Score']}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          color: Colors.blueAccent.shade400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasLocation) ...[
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.directions_car),
+                      label: Text(
+                        "Navigate in Maps".tr,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent.shade400,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        _launchGoogleMaps(market['market_lat'], market['market_lon']);
+                      },
+                    ),
+                  ),
+                ]
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  "Close".tr,
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                "Close".tr,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
         );
       },
     );
@@ -541,7 +580,7 @@ class _MarketScreenState extends State<MarketScreen> {
             fontWeight: isTotal ? FontWeight.w900 : FontWeight.bold,
             fontSize: isTotal ? 16 : 14,
             color: isTotal
-                ? Colors.green.shade600
+                ? Colors.blueAccent.shade400
                 : (isPositive
                       ? (isDark ? Colors.grey.shade300 : Colors.black87)
                       : Colors.red.shade400),
@@ -558,10 +597,7 @@ class _MarketScreenState extends State<MarketScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -612,7 +648,6 @@ class _MarketScreenState extends State<MarketScreen> {
               Future.microtask(() => fetchMarkets());
             }
 
-            // Calculate Average Price from recommended markets
             double avgPrice = 0;
             if (recommendedMarkets.isNotEmpty) {
               avgPrice = recommendedMarkets
@@ -620,191 +655,217 @@ class _MarketScreenState extends State<MarketScreen> {
                   .reduce((a, b) => a + b) / recommendedMarkets.length;
             }
 
-            return Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        crop['crop'],
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).textTheme.bodyLarge!.color,
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A).withOpacity(0.9) : const Color(0xFFF1F5F9).withOpacity(0.9),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  border: Border.all(
+                    color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.6),
+                    width: 1.5,
+                  ),
+                ),
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 24),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            "₹${(avgPrice / 100).toStringAsFixed(2)} / kg",
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          crop['crop'],
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            color: Theme.of(context).textTheme.bodyLarge!.color,
                           ),
-                          Text(
-                            "Top 3 Local Avg".tr, // Updated Label
-                            style: const TextStyle(fontSize: 10, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? crop['color'].withOpacity(0.2)
-                          : crop['color'].shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      "${'Trend: '.tr}${crop['trend']}",
-                      style: TextStyle(
-                        color: isDark
-                            ? crop['color'].shade300
-                            : crop['color'].shade700,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    "AI Predicted Top Markets".tr,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Theme.of(context).textTheme.bodyLarge!.color,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (isFetching)
-                    const Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Center(child: AgroPulseLoader()),
-                    )
-                  else if (fetchError.isNotEmpty)
-                    Text(fetchError, style: const TextStyle(color: Colors.red))
-                  else if (recommendedMarkets.isEmpty)
-                    Text(
-                      "No optimal markets found for this crop currently.".tr,
-                      style: TextStyle(color: Colors.grey.shade500),
-                    )
-                  else
-                    ...recommendedMarkets
-                        .map(
-                          (m) => GestureDetector(
-                            onTap: () => _showMarketBreakdown(context, m),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.grey.shade900
-                                    : Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isDark
-                                      ? Colors.grey.shade800
-                                      : Colors.grey.shade300,
-                                ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              "₹${(avgPrice / 100).toStringAsFixed(2)} / kg",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.blueAccent.shade400,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          "${m['Market']}, ${m['State']}",
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(
-                                        "₹${(m['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)} / kg",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
+                            ),
+                            Text(
+                              "Top 3 Local Avg".tr,
+                              style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.blueAccent.withOpacity(0.15)
+                            : Colors.blueAccent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        "${'Trend: '.tr}${crop['trend']}",
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.blueAccent.shade100
+                              : Colors.blueAccent.shade700,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      "AI Predicted Top Markets".tr,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: Theme.of(context).textTheme.bodyLarge!.color,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    if (isFetching)
+                      const Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Center(child: AgroPulseLoader()),
+                      )
+                    else if (fetchError.isNotEmpty)
+                      Text(fetchError, style: const TextStyle(color: Colors.red))
+                    else if (recommendedMarkets.isEmpty)
+                      Text(
+                        "No optimal markets found for this crop currently.".tr,
+                        style: TextStyle(color: Colors.grey.shade500),
+                      )
+                    else
+                      ...recommendedMarkets
+                          .map(
+                            (m) => GestureDetector(
+                              onTap: () => _showMarketBreakdown(context, m),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white.withOpacity(0.03)
+                                      : Colors.white.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.08)
+                                        : Colors.white.withOpacity(0.4),
                                   ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.info_outline,
-                                            size: 14,
-                                            color: Colors.blue.shade400,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            "Tap for cost breakdown".tr,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.blue.shade400,
-                                              fontStyle: FontStyle.italic,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            "${m['Market']}, ${m['State']}",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                      Text(
-                                        "${'Net Profit:'.tr} ₹${(m['Net Profit (Rs)'] / 100).toStringAsFixed(2)} / kg",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.green.shade600,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                        Text(
+                                          "₹${(m['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)} / kg",
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.info_outline,
+                                              size: 14,
+                                              color: Colors.blueAccent.shade400,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              "Tap for cost breakdown".tr,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.blueAccent.shade400,
+                                                fontStyle: FontStyle.italic,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Text(
+                                          "${'Net Profit:'.tr} ₹${(m['Net Profit (Rs)'] / 100).toStringAsFixed(2)} / kg",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blueAccent.shade400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        )
-                        .toList(),
+                          )
+                          .toList(),
 
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 30),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent.shade400,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          "Close".tr,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                       ),
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        "Close".tr,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             );
           },
@@ -818,269 +879,335 @@ class _MarketScreenState extends State<MarketScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).textTheme.bodyLarge!.color;
 
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.all(20.0),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FadeInSlide(
-                    index: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Market Analytics".tr,
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: textColor,
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Icon(
-                                    Icons.my_location,
-                                    size: 12,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    "Current Location".tr,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  InkWell(
-                                    onTap: _openOSMSearch,
-                                    child: Icon(
-                                      Icons.edit_location_alt,
-                                      size: 16,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                currentLocation,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                "${farmerLat.toStringAsFixed(4)}, ${farmerLon.toStringAsFixed(4)}",
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      body: MouseRegion(
+        onHover: (event) {
+          setState(() {
+            _mousePosition = event.localPosition;
+          });
+        },
+        child: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [const Color(0xFF0F172A), const Color(0xFF020617)]
+                      : [const Color(0xFFE2E8F0), const Color(0xFFCBD5E1)],
+                ),
+              ),
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 50),
+              curve: Curves.easeOutQuad,
+              left: _mousePosition.dx - 300,
+              top: _mousePosition.dy - 300,
+              child: Container(
+                width: 600,
+                height: 600,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withOpacity(isDark ? 0.08 : 0.4),
+                      Colors.transparent,
+                    ],
                   ),
-                  const SizedBox(height: 20),
-
-                  FadeInSlide(
-                    index: 1,
-                    child: _buildMarketHubCard(isDark),
-                  ),
-
-                  const SizedBox(height: 24),
-                  FadeInSlide(
-                    index: 2,
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Column(
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            SafeArea(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.all(24.0),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FadeInSlide(
+                            index: 0,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  "Live Exchange".tr,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: textColor,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          "Market",
+                                          style: TextStyle(
+                                            fontSize: 34,
+                                            fontWeight: FontWeight.w900,
+                                            color: textColor,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                        Text(
+                                          "Analytics",
+                                          style: TextStyle(
+                                            fontSize: 34,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.blueAccent.shade400,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  "* Global Average per Kilogram (kg)".tr,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade500,
-                                    fontStyle: FontStyle.italic,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          Icon(
+                                            Icons.my_location,
+                                            size: 14,
+                                            color: Colors.blueAccent.shade400,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            "Current Location".tr,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          InkWell(
+                                            onTap: _openOSMSearch,
+                                            child: Icon(
+                                              Icons.edit_location_alt,
+                                              size: 18,
+                                              color: Colors.blueAccent.shade400,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        currentLocation,
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.blueAccent.shade400,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        "${farmerLat.toStringAsFixed(4)}, ${farmerLon.toStringAsFixed(4)}",
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
-                            ),
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.add_circle_outline,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    size: 24,
-                                  ),
-                                  onPressed: _showAddCropDialog,
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.refresh,
-                                    color: Colors.grey.shade500,
-                                    size: 22,
-                                  ),
-                                  onPressed: _loadData,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: searchController,
-                          onChanged: (val) {
-                            setState(() {
-                              _filterCrops(val);
-                            });
-                          },
-                          style: const TextStyle(fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: "Search any crop...".tr,
-                            hintStyle: TextStyle(
-                              color: isDark
-                                  ? Colors.grey.shade600
-                                  : Colors.grey.shade400,
-                              fontSize: 14,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.search,
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                              size: 20,
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 0,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+                          FadeInSlide(
+                            index: 1,
+                            child: _buildMarketHubCard(isDark),
+                          ),
+                          const SizedBox(height: 32),
+                          FadeInSlide(
+                            index: 2,
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Live Exchange".tr,
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w900,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "* Global Average per Kilogram (kg)".tr,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade500,
+                                            fontStyle: FontStyle.italic,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.add_circle_outline,
+                                            color: Colors.blueAccent.shade400,
+                                            size: 28,
+                                          ),
+                                          onPressed: _showAddCropDialog,
+                                        ),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.refresh,
+                                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                            size: 26,
+                                          ),
+                                          onPressed: _loadData,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                TextField(
+                                  controller: searchController,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _filterCrops(val);
+                                    });
+                                  },
+                                  style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyLarge!.color),
+                                  decoration: InputDecoration(
+                                    hintText: "Search any crop...".tr,
+                                    hintStyle: TextStyle(
+                                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
+                                      fontSize: 14,
+                                    ),
+                                    prefixIcon: Icon(
+                                      Icons.search,
+                                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                      size: 22,
+                                    ),
+                                    filled: true,
+                                    fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(color: Colors.blueAccent.shade400),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          if (isLoading)
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(32.0),
+                                child: AgroPulseLoader(
+                                  message: "Fetching Live Markets...".tr,
+                                ),
+                              ),
+                            )
+                          else if (displayedCrops.isEmpty)
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(32.0),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.search_off,
+                                      size: 48,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      "${'No crops found matching '.tr}'${searchController.text}'",
+                                      style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blueAccent.shade400,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.add_circle_outline,
+                                        size: 20,
+                                      ),
+                                      label: Text(
+                                        "${'Track '.tr}'${searchController.text}'",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        _addNewCrop(searchController.text.trim());
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            Column(
+                              children: displayedCrops.asMap().entries.map((entry) {
+                                int index = entry.key;
+                                var item = entry.value;
+                                return FadeInSlide(
+                                  index: index + 3,
+                                  child: _buildMarketPriceRow(item, isDark),
+                                );
+                              }).toList(),
+                            ),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
                     ),
                   ),
-
-                  const SizedBox(height: 16),
-                  if (isLoading)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: AgroPulseLoader(
-                          message: "Fetching Live Markets...".tr,
-                        ),
-                      ),
-                    )
-                  else if (displayedCrops.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 40,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              "${'No crops found matching '.tr}'${searchController.text}'",
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.add_circle_outline,
-                                size: 18,
-                              ),
-                              label: Text(
-                                "${'Track '.tr}'${searchController.text}'",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              onPressed: () {
-                                _addNewCrop(searchController.text.trim());
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    Column(
-                      children: displayedCrops.asMap().entries.map((entry) {
-                        int index = entry.key;
-                        var item = entry.value;
-                        return FadeInSlide(
-                          index: index + 3,
-                          child: _buildMarketPriceRow(item, isDark),
-                        );
-                      }).toList(),
-                    ),
-                  const SizedBox(height: 30),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1092,29 +1219,16 @@ class _MarketScreenState extends State<MarketScreen> {
         .toList();
 
     return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.grey.shade800 : Colors.green.shade200,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black54 : Colors.green.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      decoration: _cardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: 8,
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: 12,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1123,40 +1237,40 @@ class _MarketScreenState extends State<MarketScreen> {
                   "Select crop to view optimal market:".tr,
                   style: TextStyle(
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                    fontSize: 12,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.5),
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
                     ),
-                    borderRadius: BorderRadius.circular(8),
-                    color: isDark
-                        ? Colors.black12
-                        : Colors.green.shade50.withOpacity(0.5),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       isExpanded: true,
+                      dropdownColor: isDark ? const Color(0xFF0F172A) : Colors.white,
                       value: cropNames.contains(selectedHubCrop)
                           ? selectedHubCrop
                           : (cropNames.isNotEmpty ? cropNames.first : null),
                       icon: Icon(
-                        Icons.arrow_drop_down,
-                        color: Theme.of(context).colorScheme.primary,
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.blueAccent.shade400,
+                      ),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge!.color,
                       ),
                       items: cropNames.map((String crop) {
                         return DropdownMenuItem<String>(
                           value: crop,
-                          child: Text(
-                            crop,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          child: Text(crop),
                         );
                       }).toList(),
                       onChanged: (String? newValue) {
@@ -1171,14 +1285,12 @@ class _MarketScreenState extends State<MarketScreen> {
               ],
             ),
           ),
-
           Divider(
-            color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+            color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
             height: 1,
           ),
-
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20.0),
             child: isHubLoading
                 ? const Center(
                     child: Padding(
@@ -1193,17 +1305,15 @@ class _MarketScreenState extends State<MarketScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withOpacity(0.1),
+                            color: Colors.blueAccent.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            Icons.storefront,
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 28,
+                            Icons.storefront_rounded,
+                            color: Colors.blueAccent.shade400,
+                            size: 32,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -1214,26 +1324,26 @@ class _MarketScreenState extends State<MarketScreen> {
                               Text(
                                 optimalHub!['Market'] ?? "Unknown Market".tr,
                                 style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Row(
                                 children: [
                                   Icon(
                                     Icons.auto_awesome,
                                     size: 14,
-                                    color: Colors.blue.shade400,
+                                    color: Colors.blueAccent.shade400,
                                   ),
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
                                       "Top 3 Local Avg: ₹${optimalHub!['AvgPricePerKg'].toStringAsFixed(2)} / kg",
                                       style: TextStyle(
-                                        color: Colors.blue.shade400,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                                        color: Colors.blueAccent.shade400,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
@@ -1248,15 +1358,16 @@ class _MarketScreenState extends State<MarketScreen> {
                             Text(
                               "₹${(optimalHub!['Net Profit (Rs)'] / 100).toStringAsFixed(2)}",
                               style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade600,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.blueAccent.shade400,
                               ),
                             ),
                             Text(
                               "Net Profit / kg".tr,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.grey.shade500,
                               ),
                             ),
@@ -1271,6 +1382,7 @@ class _MarketScreenState extends State<MarketScreen> {
                       style: TextStyle(
                         color: Colors.grey.shade500,
                         fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -1286,17 +1398,9 @@ class _MarketScreenState extends State<MarketScreen> {
     bool isStarred = starredCrops.contains(item['crop']);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black38 : Colors.grey.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: _cardDecoration(isDark, radius: 16).copyWith(
+        color: isDark ? Colors.white.withOpacity(0.02) : Colors.white.withOpacity(0.4),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -1305,7 +1409,7 @@ class _MarketScreenState extends State<MarketScreen> {
           child: InkWell(
             onTap: () => _showCropDetails(item),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
                   GestureDetector(
@@ -1320,41 +1424,38 @@ class _MarketScreenState extends State<MarketScreen> {
                       });
                     },
                     child: Icon(
-                      isStarred ? Icons.star : Icons.star_border,
-                      color: isStarred ? Colors.amber : Colors.grey.shade400,
-                      size: 20,
+                      isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: isStarred ? Colors.amber.shade400 : Colors.grey.shade400,
+                      size: 24,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade50,
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
                     ),
                     child: Center(
                       child: Text(
                         item['crop'][0],
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? Colors.grey.shade300
-                              : Colors.grey.shade700,
-                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontSize: 16,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       item['crop'],
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
                         color: Theme.of(context).textTheme.bodyLarge!.color,
                       ),
                     ),
@@ -1365,26 +1466,22 @@ class _MarketScreenState extends State<MarketScreen> {
                       Text(
                         "₹${(item['price'] / 100).toStringAsFixed(2)} / kg",
                         style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
                           color: Theme.of(context).textTheme.bodyLarge!.color,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: isNeutral
-                              ? (isDark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade100)
-                              : (isDark
-                                  ? item['color'].withOpacity(0.15)
-                                  : item['color'].shade50),
-                          borderRadius: BorderRadius.circular(6),
+                              ? (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05))
+                              : (isDark ? Colors.blueAccent.withOpacity(0.15) : Colors.blueAccent.withOpacity(0.1)),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           children: [
@@ -1396,22 +1493,18 @@ class _MarketScreenState extends State<MarketScreen> {
                                       : Icons.arrow_downward_rounded),
                               color: isNeutral
                                   ? Colors.grey.shade500
-                                  : (isDark
-                                      ? item['color'].shade400
-                                      : item['color'].shade700),
-                              size: 10,
+                                  : Colors.blueAccent.shade400,
+                              size: 12,
                             ),
-                            const SizedBox(width: 2),
+                            const SizedBox(width: 4),
                             Text(
                               item['trend'],
                               style: TextStyle(
                                 color: isNeutral
                                     ? Colors.grey.shade500
-                                    : (isDark
-                                        ? item['color'].shade400
-                                        : item['color'].shade700),
+                                    : Colors.blueAccent.shade400,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 10,
+                                fontSize: 11,
                               ),
                             ),
                           ],
@@ -1419,12 +1512,12 @@ class _MarketScreenState extends State<MarketScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 12),
                   IconButton(
                     icon: Icon(
-                      Icons.delete_outline,
-                      color: Colors.red.shade400,
-                      size: 20,
+                      Icons.delete_outline_rounded,
+                      color: Colors.redAccent.shade400,
+                      size: 22,
                     ),
                     onPressed: () => _deleteCrop(item),
                     constraints: const BoxConstraints(),

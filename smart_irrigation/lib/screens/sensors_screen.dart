@@ -83,6 +83,49 @@ class _SensorsScreenState extends State<SensorsScreen> {
     super.dispose();
   }
 
+  BoxDecoration _glassCardDecoration(bool isDark) {
+    return BoxDecoration(
+      color: isDark ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.5),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.4),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  BoxDecoration _greenCardDecoration(bool isDark) {
+    return BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: isDark
+            ? [const Color(0xFF0C382A), const Color(0xFF062319)]
+            : [const Color(0xFF1E6B52), const Color(0xFF114F3A)],
+      ),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(
+        color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.3),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF1E6B52).withOpacity(isDark ? 0.3 : 0.2),
+          blurRadius: 25,
+          spreadRadius: -5,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    );
+  }
+
   Future<void> _initLocationAndWeather() async {
     double lat = 22.5726;
     double lon = 88.3639;
@@ -146,16 +189,10 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   String getRainCondition(num rawValue) {
     int value = rawValue.toInt();
-
-    if (value >= 3000) {
-      return "No Rain (Dry)";
-    } else if (value >= 2000 && value < 3000) {
-      return "Light Rain";
-    } else if (value >= 1000 && value < 2000) {
-      return "Moderate Rain";
-    } else {
-      return "Heavy Rain";
-    }
+    if (value >= 3000) return "No Rain (Dry)";
+    if (value >= 2000 && value < 3000) return "Light Rain";
+    if (value >= 1000 && value < 2000) return "Moderate Rain";
+    return "Heavy Rain";
   }
 
   String _formatDate(DateTime date) {
@@ -168,87 +205,80 @@ class _SensorsScreenState extends State<SensorsScreen> {
   void _showWaterFlowHistory() {
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
-            return AlertDialog(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: Colors.grey.shade300,
-                  width: 1,
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: AlertDialog(
+                backgroundColor: isDark ? const Color(0xFF0F172A).withOpacity(0.85) : const Color(0xFFF1F5F9).withOpacity(0.9),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                    width: 1,
+                  ),
                 ),
-              ),
-              title: Text(
-                "Water Flow History".tr,
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.bodyLarge!.color,
-                  fontWeight: FontWeight.bold,
+                title: Text(
+                  "Water Flow History".tr,
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge!.color,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 300,
-                child: _waterFlowHistory.isEmpty
-                    ? Center(
-                        child: Text(
-                          "No records found".tr,
-                          style: TextStyle(color: Colors.grey.shade500),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 300,
+                  child: _waterFlowHistory.isEmpty
+                      ? Center(
+                          child: Text(
+                            "No records found".tr,
+                            style: TextStyle(color: Colors.grey.shade500),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _waterFlowHistory.length,
+                          itemBuilder: (context, index) {
+                            final item = _waterFlowHistory[index];
+                            return ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.water_drop, color: Colors.blueAccent.shade400, size: 20),
+                              ),
+                              title: Text(
+                                "${(item['amount'] as double).toStringAsFixed(2)} mL".tr,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                _formatDate(item['time']),
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                onPressed: () {
+                                  setStateDialog(() {
+                                    _waterFlowHistory.removeAt(index);
+                                  });
+                                  setState(() {});
+                                },
+                              ),
+                            );
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: _waterFlowHistory.length,
-                        itemBuilder: (context, index) {
-                          final item = _waterFlowHistory[index];
-                          return ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.cyan.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.water_drop,
-                                color: Colors.cyan,
-                                size: 20,
-                              ),
-                            ),
-                            title: Text(
-                              "${(item['amount'] as double).toStringAsFixed(2)} mL".tr,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              _formatDate(item['time']),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(
-                                Icons.delete_outline,
-                                color: Colors.redAccent,
-                              ),
-                              onPressed: () {
-                                setStateDialog(() {
-                                  _waterFlowHistory.removeAt(index);
-                                });
-                                setState(() {});
-                              },
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text("Close".tr),
                 ),
-              ],
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("Close".tr, style: TextStyle(color: Colors.blueAccent.shade400, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -462,7 +492,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
     }
   }
 
-  Widget _buildSensorHeader(String title, String sensorApiName, bool isDark) {
+  Widget _buildSensorHeader(String title, String sensorApiName, bool isDark, {bool useBlue = true}) {
     bool isSensorDisabled = disabledSensors.contains(sensorApiName);
 
     return Row(
@@ -486,10 +516,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               if (isSensorDisabled) ...[
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.redAccent.shade100,
                     borderRadius: BorderRadius.circular(4),
@@ -511,7 +538,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
           scale: 0.7,
           child: Switch(
             value: !isSensorDisabled,
-            activeColor: const Color(0xFF10B981),
+            activeColor: useBlue ? Colors.blueAccent.shade400 : const Color(0xFF1E6B52),
             inactiveThumbColor: Colors.grey.shade400,
             inactiveTrackColor: Colors.grey.shade200,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -527,6 +554,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Widget _buildDisabledState(bool isDark, {bool compact = false}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(
           Icons.sensors_off_rounded,
@@ -541,34 +569,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
             fontSize: compact ? 10 : 12,
             fontWeight: FontWeight.bold,
           ),
-        ),
-      ],
-    );
-  }
-
-  BoxDecoration _cardDecoration(bool isDark) {
-    return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        stops: const [0.0, 0.3, 1.0],
-        colors: [
-          isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
-          isDark ? Colors.white.withOpacity(0.04) : Colors.white.withOpacity(0.3),
-          isDark ? Colors.white.withOpacity(0.01) : Colors.white.withOpacity(0.05),
-        ],
-      ),
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(
-        color: isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.8),
-        width: 1.5,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-          blurRadius: 24,
-          spreadRadius: -4,
-          offset: const Offset(0, 10),
         ),
       ],
     );
@@ -603,728 +603,10 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
-  Widget _buildSystemPowerCard(bool isDark) {
-    return BouncingButton(
-      onTap: () {
-        setState(() {
-          _isSystemOn = !_isSystemOn;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        height: 120,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: const [0.0, 0.3, 1.0],
-            colors: _isSystemOn
-                ? [
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.25 : 0.4),
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.15 : 0.2),
-                    Colors.tealAccent.shade400.withOpacity(isDark ? 0.05 : 0.05)
-                  ]
-                : [
-                    isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
-                    isDark ? Colors.white.withOpacity(0.04) : Colors.white.withOpacity(0.3),
-                    isDark ? Colors.white.withOpacity(0.01) : Colors.white.withOpacity(0.05),
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: _isSystemOn
-                ? Colors.greenAccent.withOpacity(0.6)
-                : (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.8)),
-            width: _isSystemOn ? 2 : 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _isSystemOn 
-                  ? Colors.greenAccent.withOpacity(isDark ? 0.4 : 0.25)
-                  : Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: _isSystemOn ? 30 : 24,
-              spreadRadius: _isSystemOn ? 2 : -4,
-              offset: Offset(0, _isSystemOn ? 8 : 10),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: _isSystemOn
-                      ? [Colors.greenAccent.shade400, Colors.tealAccent.shade400]
-                      : [isDark ? Colors.grey.shade800 : Colors.grey.shade300, isDark ? Colors.grey.shade900 : Colors.grey.shade200],
-                ),
-                boxShadow: _isSystemOn
-                    ? [BoxShadow(color: Colors.greenAccent.withOpacity(0.5), blurRadius: 10)]
-                    : [],
-              ),
-              child: Icon(
-                Icons.power_settings_new_rounded,
-                size: 32,
-                color: _isSystemOn ? Colors.white : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "SYSTEM POWER".tr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: _isSystemOn
-                        ? Colors.greenAccent.shade700
-                        : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _isSystemOn ? "SYSTEM ON".tr : "SYSTEM OFF".tr,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: _isSystemOn
-                        ? Colors.greenAccent.shade700
-                        : Theme.of(context).textTheme.bodyLarge!.color,
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFieldSelector(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.landscape_rounded, color: Colors.greenAccent.shade700, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                "ACTIVE FIELD".tr,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5)),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedField,
-                isExpanded: true,
-                dropdownColor: isDark ? const Color(0xFF06180F) : Colors.white,
-                icon: Icon(Icons.keyboard_arrow_down_rounded, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.bodyLarge!.color,
-                ),
-                items: _userFields.keys.map((String field) {
-                  return DropdownMenuItem<String>(
-                    value: field,
-                    child: Text(field),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      _selectedField = newValue;
-                    });
-                  }
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Mapped Area:".tr,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-              ),
-              Text(
-                _userFields[_selectedField] ?? "--",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.greenAccent.shade700,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIrrigationControlArea(bool isDark) {
-    bool isAuto = _pumpMode == 'auto';
-    return Container(
-      height: 190,
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "IRRIGATION".tr,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text("AUTO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isAuto ? Colors.greenAccent.shade700 : Colors.grey)),
-              Transform.scale(
-                scale: 0.7,
-                child: Switch(
-                  value: !isAuto,
-                  activeColor: Colors.orangeAccent,
-                  inactiveThumbColor: Colors.greenAccent.shade400,
-                  activeTrackColor: Colors.orangeAccent.withOpacity(0.3),
-                  inactiveTrackColor: Colors.greenAccent.withOpacity(0.3),
-                  onChanged: (val) {
-                    _updatePumpControl(val ? 'manual' : 'auto', false, false, isShadeDeployed, isSprinklerActive);
-                  },
-                ),
-              ),
-              Text("Manual", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: !isAuto ? Colors.orangeAccent : Colors.grey)),
-            ],
-          ),
-          const Spacer(),
-          if (!isAuto)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildMiniPumpToggle("Irrigation Pump", _pump1State, () => _updatePumpControl('manual', !_pump1State, _pump2State, isShadeDeployed, isSprinklerActive)),
-                _buildMiniPumpToggle("Reservoir Refill Pump", _pump2State, () => _updatePumpControl('manual', _pump1State, !_pump2State, isShadeDeployed, isSprinklerActive)),
-              ],
-            )
-          else
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  "Auto mode active.\nSensors control pumps.".tr,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniPumpToggle(String label, bool state, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: state ? Colors.cyan.shade600 : Colors.grey.withOpacity(0.2),
-              boxShadow: state ? [BoxShadow(color: Colors.cyan.withOpacity(0.5), blurRadius: 8)] : [],
-            ),
-            child: Icon(Icons.water_drop, color: state ? Colors.white : Colors.grey, size: 20),
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShadeControlCard(bool isDark) {
-    return BouncingButton(
-      onTap: () {
-        if (!_shadeOverride) {
-          setState(() {
-            _shadeOverride = true;
-          });
-        }
-        _updatePumpControl(_pumpMode, _pump1State, _pump2State, !isShadeDeployed, isSprinklerActive);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        height: 180,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: const [0.0, 0.3, 1.0],
-            colors: isShadeDeployed
-                ? [
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.25 : 0.4),
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.15 : 0.2),
-                    Colors.tealAccent.shade400.withOpacity(isDark ? 0.05 : 0.05)
-                  ]
-                : [
-                    isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
-                    isDark ? Colors.white.withOpacity(0.04) : Colors.white.withOpacity(0.3),
-                    isDark ? Colors.white.withOpacity(0.01) : Colors.white.withOpacity(0.05),
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isShadeDeployed
-                ? Colors.greenAccent.withOpacity(0.6)
-                : (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.8)),
-            width: isShadeDeployed ? 2 : 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isShadeDeployed 
-                  ? Colors.greenAccent.withOpacity(isDark ? 0.4 : 0.25)
-                  : Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: isShadeDeployed ? 30 : 24,
-              spreadRadius: isShadeDeployed ? 2 : -4,
-              offset: Offset(0, isShadeDeployed ? 8 : 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              "FARM SHADE".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isShadeDeployed
-                    ? Colors.greenAccent.shade700
-                    : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
-                letterSpacing: 0.5,
-              ),
-            ),
-            const Spacer(),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: isShadeDeployed
-                      ? [Colors.greenAccent.shade400, Colors.tealAccent.shade400]
-                      : [isDark ? Colors.grey.shade800 : Colors.grey.shade300, isDark ? Colors.grey.shade900 : Colors.grey.shade200],
-                ),
-                boxShadow: isShadeDeployed
-                    ? [BoxShadow(color: Colors.greenAccent.withOpacity(0.5), blurRadius: 10)]
-                    : [],
-              ),
-              child: Icon(
-                Icons.roofing_rounded,
-                size: 32,
-                color: isShadeDeployed
-                    ? Colors.white
-                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-              ),
-            ),
-            const Spacer(),
-            Text(
-              isShadeDeployed ? "DEPLOYED".tr : "RETRACTED".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: isShadeDeployed
-                    ? Colors.greenAccent.shade700
-                    : Theme.of(context).textTheme.bodyLarge!.color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSprinklerControlCard(bool isDark) {
-    return BouncingButton(
-      onTap: () {
-        _updatePumpControl(_pumpMode, _pump1State, _pump2State, isShadeDeployed, !isSprinklerActive);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        height: 180,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: const [0.0, 0.3, 1.0],
-            colors: isSprinklerActive
-                ? [
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.25 : 0.4),
-                    Colors.greenAccent.shade400.withOpacity(isDark ? 0.15 : 0.2),
-                    Colors.tealAccent.shade400.withOpacity(isDark ? 0.05 : 0.05)
-                  ]
-                : [
-                    isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.7),
-                    isDark ? Colors.white.withOpacity(0.04) : Colors.white.withOpacity(0.3),
-                    isDark ? Colors.white.withOpacity(0.01) : Colors.white.withOpacity(0.05),
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isSprinklerActive
-                ? Colors.greenAccent.withOpacity(0.6)
-                : (isDark ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.8)),
-            width: isSprinklerActive ? 2 : 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: isSprinklerActive 
-                  ? Colors.greenAccent.withOpacity(isDark ? 0.4 : 0.25)
-                  : Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: isSprinklerActive ? 30 : 24,
-              spreadRadius: isSprinklerActive ? 2 : -4,
-              offset: Offset(0, isSprinklerActive ? 8 : 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              "SPRINKLER".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isSprinklerActive
-                    ? Colors.greenAccent.shade700
-                    : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
-                letterSpacing: 0.5,
-              ),
-            ),
-            const Spacer(),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: isSprinklerActive
-                      ? [Colors.greenAccent.shade400, Colors.tealAccent.shade400]
-                      : [isDark ? Colors.grey.shade800 : Colors.grey.shade300, isDark ? Colors.grey.shade900 : Colors.grey.shade200],
-                ),
-                boxShadow: isSprinklerActive
-                    ? [BoxShadow(color: Colors.greenAccent.withOpacity(0.5), blurRadius: 10)]
-                    : [],
-              ),
-              child: Icon(
-                Icons.shower_rounded,
-                size: 32,
-                color: isSprinklerActive
-                    ? Colors.white
-                    : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
-              ),
-            ),
-            const Spacer(),
-            Text(
-              isSprinklerActive ? "ACTIVE".tr : "INACTIVE".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: isSprinklerActive
-                    ? Colors.greenAccent.shade700
-                    : Theme.of(context).textTheme.bodyLarge!.color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomShadeCard(bool isDark) {
-    bool isAuto = !_shadeOverride;
-    final primaryTextColor = Theme.of(context).textTheme.bodyLarge!.color;
-
-    return Container(
-      height: 140,
-      padding: const EdgeInsets.all(12),
-      decoration: _cardDecoration(isDark),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "FARM SHADE RETRACTOR".tr,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              SizedBox(
-                width: 80,
-                height: 50,
-                child: Center(
-                  child: _ShadeAnimation(isDeployed: isShadeDeployed),
-                ),
-              ),
-              const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    isShadeDeployed ? "DEPLOYED".tr : "RETRACTED".tr,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: primaryTextColor,
-                      height: 1.1,
-                    ),
-                  ),
-                  Text(
-                    "Status".tr,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Transform.scale(
-                    scale: 0.65,
-                    child: Switch(
-                      value: !isAuto,
-                      activeColor: Colors.orangeAccent,
-                      inactiveThumbColor: Colors.greenAccent.shade400,
-                      activeTrackColor: Colors.orangeAccent.withOpacity(0.3),
-                      inactiveTrackColor: Colors.greenAccent.withOpacity(0.3),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      onChanged: (val) {
-                        setState(() {
-                          _shadeOverride = val;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isAuto ? "AUTO".tr : "MANUAL".tr,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: isAuto ? Colors.greenAccent.shade700 : Colors.orangeAccent,
-                    ),
-                  ),
-                ],
-              ),
-              if (!isAuto)
-                GestureDetector(
-                  onTap: () {
-                    _updatePumpControl(_pumpMode, _pump1State, _pump2State, !isShadeDeployed, isSprinklerActive);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: isShadeDeployed ? Colors.greenAccent.shade700 : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isShadeDeployed ? Colors.transparent : Colors.grey.shade400,
-                      ),
-                      boxShadow: isShadeDeployed ? [
-                        BoxShadow(
-                          color: Colors.greenAccent.withOpacity(0.4),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        )
-                      ] : null,
-                    ),
-                    child: Text(
-                      isShadeDeployed ? "RETRACT".tr : "DEPLOY".tr,
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: isShadeDeployed ? Colors.white : (isDark ? Colors.grey.shade300 : Colors.grey.shade800),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Text(
-                  isShadeDeployed ? "Sensors Deployed".tr : "Sensors Retracted".tr,
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBatteryCard(bool isDark, bool isDay) {
-    double lightValue = double.tryParse(_sensorLight) ?? 0.0;
-    bool isCharging = isDay && lightValue > 500;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-      decoration: _cardDecoration(isDark),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "SYSTEM BATTERY".tr,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    "98",
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      color: Theme.of(context).textTheme.bodyLarge!.color,
-                      height: 1.0,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4.0),
-                    child: Text(
-                      "%",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isCharging ? Colors.greenAccent.withOpacity(0.2) : Colors.greenAccent.shade400.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isCharging ? Icons.battery_charging_full_rounded : Icons.battery_full_rounded,
-              color: isCharging ? Colors.greenAccent.shade700 : Colors.greenAccent.shade700,
-              size: 36,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildRealWeatherCard(bool isDark, bool isDay) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isDark
-              ? (isDay
-                  ? [const Color(0xFF065F46).withOpacity(0.8), const Color(0xFF022C22).withOpacity(0.8)]
-                  : [const Color(0xFF064E3B).withOpacity(0.8), const Color(0xFF020617).withOpacity(0.8)])
-              : (isDay
-                  ? [Colors.teal.shade400.withOpacity(0.9), Colors.greenAccent.shade400.withOpacity(0.9)]
-                  : [const Color(0xFF0F766E).withOpacity(0.9), const Color(0xFF064E3B).withOpacity(0.9)]),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.greenAccent.withOpacity(isDark ? 0.3 : 0.2),
-            blurRadius: 25,
-            spreadRadius: -5,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: Colors.tealAccent.withOpacity(isDark ? 0.15 : 0.1),
-            blurRadius: 20,
-            spreadRadius: -5,
-            offset: const Offset(-5, -5),
-          ),
-        ],
-      ),
+      decoration: _greenCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1369,7 +651,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const Spacer(),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1381,12 +663,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   return Transform.scale(
                     scale: val,
                     child: Icon(
-                      isDay
-                          ? Icons.wb_sunny_rounded
-                          : Icons.nights_stay_rounded,
-                      color: isDay
-                          ? Colors.yellowAccent.shade400
-                          : Colors.teal.shade100,
+                      isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
+                      color: isDay ? Colors.yellowAccent.shade400 : Colors.teal.shade100,
                       size: 56,
                     ),
                   );
@@ -1418,7 +696,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
             decoration: BoxDecoration(
@@ -1431,37 +709,17 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildWeatherMiniItem(
-                      Icons.water_drop_outlined,
-                      "Humidity".tr,
-                      _realHumidity,
-                    ),
-                    _buildWeatherMiniItem(
-                      Icons.umbrella_outlined,
-                      "Precipitation".tr,
-                      _realPrecipitation,
-                    ),
-                    _buildWeatherMiniItem(
-                      Icons.air_rounded,
-                      "Wind".tr,
-                      _realWind,
-                    ),
+                    _buildWeatherMiniItem(Icons.water_drop_outlined, "Humidity".tr, _realHumidity),
+                    _buildWeatherMiniItem(Icons.umbrella_outlined, "Precipitation".tr, _realPrecipitation),
+                    _buildWeatherMiniItem(Icons.air_rounded, "Wind".tr, _realWind),
                   ],
                 ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildWeatherMiniItem(
-                      Icons.wb_twilight_rounded,
-                      "Dawn".tr,
-                      _sunrise,
-                    ),
-                    _buildWeatherMiniItem(
-                      Icons.nights_stay_outlined,
-                      "Dusk".tr,
-                      _sunset,
-                    ),
+                    _buildWeatherMiniItem(Icons.wb_twilight_rounded, "Dawn".tr, _sunrise),
+                    _buildWeatherMiniItem(Icons.nights_stay_outlined, "Dusk".tr, _sunset),
                   ],
                 ),
               ],
@@ -1494,6 +752,346 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
+  Widget _buildSystemPowerCard(bool isDark) {
+    return BouncingButton(
+      onTap: () {
+        setState(() {
+          _isSystemOn = !_isSystemOn;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        padding: const EdgeInsets.all(20),
+        decoration: _isSystemOn ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isSystemOn ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade800 : Colors.grey.shade300),
+                boxShadow: _isSystemOn ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)] : [],
+              ),
+              child: Icon(
+                Icons.power_settings_new_rounded,
+                size: 28,
+                color: _isSystemOn ? Colors.white : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "SYSTEM POWER".tr,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: _isSystemOn ? Colors.white.withOpacity(0.8) : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isSystemOn ? "SYSTEM ON".tr : "SYSTEM OFF".tr,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: _isSystemOn ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldSelector(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _greenCardDecoration(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.landscape_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "ACTIVE FIELD".tr,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white.withOpacity(0.8),
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedField,
+                isExpanded: true,
+                dropdownColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                items: _userFields.keys.map((String field) {
+                  return DropdownMenuItem<String>(
+                    value: field,
+                    child: Text(
+                      field, 
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87)
+                    ),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedField = newValue;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Mapped Area:".tr,
+                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8)),
+              ),
+              Text(
+                _userFields[_selectedField] ?? "--",
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShadeControlCard(bool isDark) {
+    return BouncingButton(
+      onTap: () {
+        if (!_shadeOverride) {
+          setState(() {
+            _shadeOverride = true;
+          });
+        }
+        _updatePumpControl(_pumpMode, _pump1State, _pump2State, !isShadeDeployed, isSprinklerActive);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        padding: const EdgeInsets.all(20),
+        decoration: isShadeDeployed ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              "FARM SHADE".tr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isShadeDeployed ? Colors.white.withOpacity(0.8) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                letterSpacing: 0.5,
+              ),
+            ),
+            const Spacer(),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isShadeDeployed ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade800 : Colors.white),
+                boxShadow: isShadeDeployed ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)] : [],
+              ),
+              child: Icon(
+                Icons.roofing_rounded,
+                size: 24,
+                color: isShadeDeployed ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              isShadeDeployed ? "DEPLOYED".tr : "RETRACTED".tr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: isShadeDeployed ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSprinklerControlCard(bool isDark) {
+    return BouncingButton(
+      onTap: () {
+        _updatePumpControl(_pumpMode, _pump1State, _pump2State, isShadeDeployed, !isSprinklerActive);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        padding: const EdgeInsets.all(20),
+        decoration: isSprinklerActive ? _greenCardDecoration(isDark) : _glassCardDecoration(isDark),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              "SPRINKLER".tr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isSprinklerActive ? Colors.white.withOpacity(0.8) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                letterSpacing: 0.5,
+              ),
+            ),
+            const Spacer(),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSprinklerActive ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade800 : Colors.white),
+                boxShadow: isSprinklerActive ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10)] : [],
+              ),
+              child: Icon(
+                Icons.shower_rounded,
+                size: 24,
+                color: isSprinklerActive ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+              ),
+            ),
+            const Spacer(),
+            Text(
+              isSprinklerActive ? "ACTIVE".tr : "INACTIVE".tr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: isSprinklerActive ? Colors.white : Theme.of(context).textTheme.bodyLarge!.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIrrigationControlArea(bool isDark) {
+    bool isAuto = _pumpMode == 'auto';
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _greenCardDecoration(isDark),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            "IRRIGATION CONTROL".tr,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.white.withOpacity(0.8),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text("AUTO", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isAuto ? Colors.white : Colors.white54)),
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: !isAuto,
+                  activeColor: Colors.orangeAccent,
+                  inactiveThumbColor: const Color(0xFF064E3B),
+                  activeTrackColor: Colors.orangeAccent.withOpacity(0.3),
+                  inactiveTrackColor: Colors.white.withOpacity(0.3),
+                  onChanged: (val) {
+                    _updatePumpControl(val ? 'manual' : 'auto', false, false, isShadeDeployed, isSprinklerActive);
+                  },
+                ),
+              ),
+              Text("Manual", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: !isAuto ? Colors.orangeAccent : Colors.white54)),
+            ],
+          ),
+          const Spacer(),
+          if (!isAuto)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildMiniPumpToggle("Crop Pump", _pump1State, () => _updatePumpControl('manual', !_pump1State, _pump2State, isShadeDeployed, isSprinklerActive)),
+                _buildMiniPumpToggle("Refill Pump", _pump2State, () => _updatePumpControl('manual', _pump1State, !_pump2State, isShadeDeployed, isSprinklerActive)),
+              ],
+            )
+          else
+            Center(
+              child: Text(
+                "Auto mode active.\nSensors manage pumps.".tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.8),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniPumpToggle(String label, bool state, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: state ? Colors.cyan.shade400 : Colors.black.withOpacity(0.2),
+              boxShadow: state ? [BoxShadow(color: Colors.cyan.withOpacity(0.5), blurRadius: 8)] : [],
+            ),
+            child: Icon(Icons.water_drop, color: state ? Colors.white : Colors.white54, size: 16),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSoilCard(bool isDark) {
     double rawCap = double.tryParse(_sensorSoilMoisture) ?? 0.0;
     double capPercent = ((4095 - rawCap) / 4095) * 100;
@@ -1502,9 +1100,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
     bool soilDisabled = disabledSensors.contains('soil_moisture');
 
     return Container(
-      height: 220,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1514,27 +1111,24 @@ class _SensorsScreenState extends State<SensorsScreen> {
             child: soilDisabled
                 ? _buildDisabledState(isDark)
                 : TweenAnimationBuilder<double>(
-                    tween: Tween<double>(
-                      begin: 0,
-                      end: capPercent,
-                    ),
+                    tween: Tween<double>(begin: 0, end: capPercent),
                     duration: const Duration(seconds: 2),
                     curve: Curves.easeOutCubic,
                     builder: (context, value, child) {
                       return SizedBox(
-                        width: 100,
-                        height: 100,
+                        width: 80,
+                        height: 80,
                         child: CustomPaint(
                           painter: _GaugePainter(
                             percentage: value,
                             isDark: isDark,
-                            primaryColor: capCondition == "WET" ? Colors.greenAccent.shade700 : Colors.orangeAccent,
+                            primaryColor: capCondition == "WET" ? Colors.blueAccent.shade400 : Colors.orangeAccent,
                           ),
                           child: Center(
                             child: Text(
                               "${value.toInt()}%",
                               style: TextStyle(
-                                fontSize: 24,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w900,
                                 color: Theme.of(context).textTheme.bodyLarge!.color,
                               ),
@@ -1550,9 +1144,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
             child: Text(
               "Condition: $capCondition".tr,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
-                color: capCondition == "WET" ? Colors.greenAccent.shade700 : Colors.orangeAccent,
+                color: capCondition == "WET" ? Colors.blueAccent.shade400 : Colors.orangeAccent,
               ),
             ),
           ),
@@ -1568,25 +1162,22 @@ class _SensorsScreenState extends State<SensorsScreen> {
     bool depthDisabled = disabledSensors.contains('depth');
 
     return Container(
-      height: 220,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSensorHeader("TANK DEPTH", "depth", isDark),
           const Spacer(),
           Center(
-            child: depthDisabled
-                ? _buildDisabledState(isDark)
-                : _WaterTank(depthPercentage: depthPercent),
+            child: depthDisabled ? _buildDisabledState(isDark) : _WaterTank(depthPercentage: depthPercent),
           ),
           const Spacer(),
           Center(
             child: Text(
               "${'Level:'.tr} ${depthDisabled ? '--' : depthPercent.toInt()}%",
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: Theme.of(context).textTheme.bodyLarge!.color,
               ),
@@ -1601,9 +1192,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
     bool dhtDisabled = disabledSensors.contains('temperature');
 
     return Container(
-      height: 140,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1616,41 +1206,27 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   children: [
                     Column(
                       children: [
-                        Icon(
-                          Icons.thermostat_rounded,
-                          color: Colors.orangeAccent.shade400,
-                          size: 28,
-                        ),
+                        Icon(Icons.thermostat_rounded, color: Colors.orangeAccent.shade400, size: 24),
                         const SizedBox(height: 4),
                         Text(
                           "$_sensorTemperature°",
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).textTheme.bodyLarge!.color,
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      width: 1,
-                      height: 40,
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.black.withOpacity(0.1),
-                    ),
+                    Container(width: 1, height: 40, color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1)),
                     Column(
                       children: [
-                        Icon(
-                          Icons.water_drop_outlined,
-                          color: Colors.cyan.shade400,
-                          size: 28,
-                        ),
+                        Icon(Icons.water_drop_outlined, color: Colors.blueAccent.shade400, size: 24),
                         const SizedBox(height: 4),
                         Text(
                           "$_sensorHumidity%",
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).textTheme.bodyLarge!.color,
                           ),
@@ -1670,20 +1246,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
     bool ldrDisabled = disabledSensors.contains('ldr');
 
     String ldrDescription = "Normal Light".tr;
-    if (lightValue < 300) {
-      ldrDescription = "Dark / Night".tr;
-    } else if (lightValue < 800) {
-      ldrDescription = "Cloudy / Dim".tr;
-    } else if (lightValue < 2000) {
-      ldrDescription = "Normal Light".tr;
-    } else {
-      ldrDescription = "Bright Sun".tr;
-    }
+    if (lightValue < 300) ldrDescription = "Dark / Night".tr;
+    else if (lightValue < 800) ldrDescription = "Cloudy / Dim".tr;
+    else if (lightValue < 2000) ldrDescription = "Normal Light".tr;
+    else ldrDescription = "Bright Sun".tr;
 
     return Container(
-      height: 140,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1695,24 +1265,19 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     TweenAnimationBuilder<double>(
-                      tween: Tween<double>(
-                        begin: 0.5,
-                        end: 0.5 + (lightValue / 2000),
-                      ),
+                      tween: Tween<double>(begin: 0.5, end: 0.5 + (lightValue / 2000)),
                       duration: const Duration(seconds: 1),
                       builder: (context, val, child) {
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.amberAccent.withOpacity(
-                              val.clamp(0.0, 1.0) * 0.3,
-                            ),
+                            color: Colors.amberAccent.withOpacity(val.clamp(0.0, 1.0) * 0.3),
                           ),
                           child: Icon(
                             Icons.lightbulb,
                             color: Colors.amberAccent,
-                            size: 24 * val.clamp(0.8, 1.5),
+                            size: 20 * val.clamp(0.8, 1.5),
                           ),
                         );
                       },
@@ -1728,29 +1293,19 @@ class _SensorsScreenState extends State<SensorsScreen> {
                             Text(
                               _sensorLight,
                               style: TextStyle(
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).textTheme.bodyLarge!.color,
                               ),
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              "LUX".tr,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                              ),
-                            ),
+                            Text("LUX".tr, style: TextStyle(fontSize: 9, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
                           ldrDescription,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amberAccent.shade700,
-                          ),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amberAccent.shade700),
                         ),
                       ],
                     ),
@@ -1762,15 +1317,83 @@ class _SensorsScreenState extends State<SensorsScreen> {
     );
   }
 
+  Widget _buildBatteryCard(bool isDark, bool isDay) {
+    double lightValue = double.tryParse(_sensorLight) ?? 0.0;
+    String chargeStatus = "Not Charging".tr;
+    if (isDay) {
+      if (lightValue > 1500) chargeStatus = "Fast Charging".tr;
+      else if (lightValue > 500) chargeStatus = "Slow Charging".tr;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: _glassCardDecoration(isDark),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "SYSTEM BATTERY".tr,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    "98",
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, height: 1.0),
+                  ),
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4.0),
+                    child: Text("%", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                chargeStatus,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: chargeStatus == "Not Charging".tr ? (isDark ? Colors.grey.shade500 : Colors.grey.shade600) : Colors.blueAccent.shade400,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: chargeStatus != "Not Charging".tr ? Colors.blueAccent.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              chargeStatus != "Not Charging".tr ? Icons.battery_charging_full_rounded : Icons.battery_full_rounded,
+              color: chargeStatus != "Not Charging".tr ? Colors.blueAccent.shade400 : Colors.blueAccent.shade400,
+              size: 28,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRainCard(bool isDark) {
     double rainValue = double.tryParse(_sensorRain) ?? 0.0;
     bool rainDisabled = disabledSensors.contains('rain_level');
 
     return Container(
-      height: 140,
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1781,30 +1404,19 @@ class _SensorsScreenState extends State<SensorsScreen> {
               : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      height: 60,
-                      width: 80,
-                      child: _RainIndicator(intensity: rainValue),
-                    ),
-                    const SizedBox(width: 20),
+                    SizedBox(height: 50, width: 60, child: _RainIndicator(intensity: rainValue)),
+                    const SizedBox(width: 16),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           "Rain Condition:".tr,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                          ),
+                          style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                         ),
                         Text(
                           getRainCondition(rainValue).tr,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).textTheme.bodyLarge!.color,
-                          ),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge!.color),
                         ),
                       ],
                     ),
@@ -1819,84 +1431,62 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Widget _buildWaterFlowCard(bool isDark) {
     bool flowDisabled = disabledSensors.contains('water_flow');
     return Container(
-      height: 190,
       padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(isDark),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _buildSensorHeader("WATER FLOW RATE", "water_flow", isDark),
-              ),
+              Expanded(child: _buildSensorHeader("WATER FLOW RATE", "water_flow", isDark)),
               const SizedBox(width: 8),
               _SpinningMotor(isRunning: _motorRunning),
             ],
           ),
-          const Spacer(),
-          flowDisabled
-              ? Center(child: _buildDisabledState(isDark))
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween<double>(
-                        begin: 0,
-                        end: double.tryParse(_sensorWaterFlow) ?? 0.0,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Text(
-                          value.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.cyan.shade600,
-                            height: 1.0,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4.0),
-                      child: Text(
-                        "mL/sec",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                        ),
-                      ),
-                    ),
-                  ],
+          if (flowDisabled)
+            Center(child: _buildDisabledState(isDark))
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: double.tryParse(_sensorWaterFlow) ?? 0.0),
+                  duration: const Duration(seconds: 2),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) {
+                    return Text(
+                      value.toStringAsFixed(2),
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blueAccent.shade400, height: 1.0),
+                    );
+                  },
                 ),
-          const SizedBox(height: 12),
-          if (!flowDisabled)
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0),
+                  child: Text(
+                    "mL/sec",
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                  ),
+                ),
+              ],
+            ),
             SizedBox(
-              height: 30,
+              height: 20,
               width: double.infinity,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(8, (index) {
                   return TweenAnimationBuilder<double>(
-                    tween: Tween<double>(
-                      begin: 0.2,
-                      end: _motorRunning ? 1.0 : 0.2,
-                    ),
+                    tween: Tween<double>(begin: 0.2, end: _motorRunning ? 1.0 : 0.2),
                     duration: Duration(milliseconds: 400 + (index * 100)),
                     curve: Curves.easeInOutSine,
                     builder: (context, val, child) {
                       return Container(
-                        width: 8,
-                        height: 30 * val,
-                        decoration: BoxDecoration(
-                          color: Colors.cyan.shade400.withOpacity(val),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
+                        width: 6,
+                        height: 20 * val,
+                        decoration: BoxDecoration(color: Colors.blueAccent.shade400.withOpacity(val), borderRadius: BorderRadius.circular(4)),
                       );
                     },
                     onEnd: () {
@@ -1906,46 +1496,19 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 }),
               ),
             ),
+          ]
         ],
       ),
     );
   }
 
   Widget _buildFlowSummaryCard(bool isDark) {
-    double totalFlow = _waterFlowHistory.fold(
-      0.0,
-      (sum, item) => sum + (item['amount'] as num).toDouble(),
-    );
+    double totalFlow = _waterFlowHistory.fold(0.0, (sum, item) => sum + (item['amount'] as num).toDouble());
     double lastVol = double.tryParse(_lastCycleVolume) ?? 0.0;
 
     return Container(
-      height: 190,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          stops: const [0.0, 0.3, 1.0],
-          colors: [
-            Colors.greenAccent.shade400.withOpacity(isDark ? 0.2 : 0.3),
-            Colors.tealAccent.shade400.withOpacity(isDark ? 0.05 : 0.1),
-            Colors.white.withOpacity(isDark ? 0.01 : 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.greenAccent.withOpacity(isDark ? 0.4 : 0.6),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.greenAccent.withOpacity(isDark ? 0.3 : 0.2),
-            blurRadius: 25,
-            spreadRadius: -5,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+      decoration: _glassCardDecoration(isDark),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -1957,9 +1520,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   "TOTAL RECORDED FLOW".tr,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.greenAccent.shade100 : Colors.greenAccent.shade700,
+                    color: isDark ? Colors.blueAccent.shade200 : Colors.blueAccent.shade700,
                     letterSpacing: 0.5,
                   ),
                   maxLines: 2,
@@ -1971,66 +1534,42 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 onTap: _showWaterFlowHistory,
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.greenAccent.shade700,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.history_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
+                  decoration: BoxDecoration(color: Colors.blueAccent.shade700, shape: BoxShape.circle),
+                  child: const Icon(Icons.history_rounded, color: Colors.white, size: 12),
                 ),
               ),
             ],
           ),
           const Spacer(),
-          Text(
-            "${totalFlow.toStringAsFixed(2)} mL",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              color: Theme.of(context).textTheme.bodyLarge!.color,
-            ),
-          ),
-          Text(
-            "Overall Usage".tr,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text(
-                "Last Cycle Delivered:".tr,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.greenAccent.shade100 : Colors.greenAccent.shade700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Overall".tr, style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    "${totalFlow.toStringAsFixed(1)} mL",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                "${lastVol.toStringAsFixed(2)} mL",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Container(width: 1, height: 30, color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1)),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Last Cycle".tr, style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    "${lastVol.toStringAsFixed(1)} mL",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color),
+                  ),
+                ],
               ),
             ],
           ),
+          const Spacer(),
         ],
       ),
     );
@@ -2039,34 +1578,17 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Widget _buildSystemOffPlaceholder(bool isDark) {
     return Container(
       key: const ValueKey("sensor_panel_off"),
-      height: 400,
-      decoration: _cardDecoration(isDark),
+      height: 200,
+      decoration: _glassCardDecoration(isDark),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.power_off_rounded,
-              size: 80,
-              color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-            ),
+            Icon(Icons.power_off_rounded, size: 48, color: isDark ? Colors.grey.shade600 : Colors.grey.shade400),
             const SizedBox(height: 16),
-            Text(
-              "System is Offline",
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-              ),
-            ),
+            Text("System is Offline", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.grey.shade300 : Colors.grey.shade700)),
             const SizedBox(height: 8),
-            Text(
-              "Power on the system from the left pane to view live data.",
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              ),
-            ),
+            Text("Power on the system from the control panel to view live data.", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
           ],
         ),
       ),
@@ -2076,7 +1598,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     final hour = DateTime.now().hour;
     final isDay = hour >= 6 && hour < 18;
 
@@ -2084,138 +1605,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
     bool isDesktop = screenWidth >= 1100;
     bool isTablet = screenWidth >= 750 && screenWidth < 1100;
 
-    Widget leftPane = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildSystemPowerCard(isDark),
-        const SizedBox(height: 16),
-        _buildFieldSelector(isDark),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _buildShadeControlCard(isDark)),
-            const SizedBox(width: 16),
-            Expanded(child: _buildSprinklerControlCard(isDark)),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _buildBottomShadeCard(isDark),
-        const SizedBox(height: 16),
-        _buildIrrigationControlArea(isDark),
-      ],
-    );
-
-    Widget centerPane = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
-      child: _isSystemOn
-          ? Column(
-              key: const ValueKey("sensor_panel_on"),
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: _buildSoilCard(isDark)),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildDepthCard(isDark)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _buildDhtCard(isDark)),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildLdrCard(isDark)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildRainCard(isDark),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(child: _buildWaterFlowCard(isDark)),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildFlowSummaryCard(isDark)),
-                  ],
-                ),
-              ],
-            )
-          : _buildSystemOffPlaceholder(isDark),
-    );
-
-    Widget rightPane = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildBatteryCard(isDark, isDay),
-        const SizedBox(height: 16),
-        _buildRealWeatherCard(isDark, isDay),
-      ],
-    );
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: isDark ? const Color(0xFF021509) : const Color(0xFFEAF5EF),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Row(
-          children: [
-            Text(
-              "Agro",
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w900,
-                color: Theme.of(context).textTheme.bodyLarge!.color,
-                letterSpacing: -0.5,
-              ),
-            ),
-            Text(
-              "Sync",
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w900,
-                color: Colors.greenAccent.shade400,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.spa_rounded, color: Colors.greenAccent.shade400, size: 34),
-          ],
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.notifications_active_rounded,
-                color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
-              ),
-              onPressed: () {},
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.greenAccent.shade400, width: 2),
-            ),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-              child: Icon(
-                Icons.person_rounded,
-                color: isDark ? Colors.white : Colors.black87,
-                size: 24,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: MouseRegion(
         onHover: (event) {
           setState(() {
@@ -2230,8 +1621,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: isDark
-                      ? [const Color(0xFF042F1A), const Color(0xFF011208)]
-                      : [const Color(0xFFD1EAE0), const Color(0xFFB5DCC9)],
+                      ? [const Color(0xFF0F172A), const Color(0xFF020617)]
+                      : [const Color(0xFFE2E8F0), const Color(0xFFCBD5E1)],
                 ),
               ),
             ),
@@ -2247,7 +1638,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      Colors.white.withOpacity(isDark ? 0.12 : 0.3),
+                      Colors.white.withOpacity(isDark ? 0.08 : 0.4),
                       Colors.transparent,
                     ],
                   ),
@@ -2262,47 +1653,152 @@ class _SensorsScreenState extends State<SensorsScreen> {
             ),
             SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 16.0, bottom: 40.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FadeInSlide(index: 0, child: _buildGreeting(isDark)),
-                    isDesktop
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(flex: 3, child: FadeInSlide(index: 1, child: leftPane)),
-                              const SizedBox(width: 16),
-                              Expanded(flex: 5, child: FadeInSlide(index: 2, child: centerPane)),
-                              const SizedBox(width: 16),
-                              Expanded(flex: 3, child: FadeInSlide(index: 3, child: rightPane)),
-                            ],
-                          )
-                        : isTablet
-                            ? Column(
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                    
+                    FadeInSlide(
+                      index: 1,
+                      child: isDesktop || isTablet 
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
                                     children: [
-                                      Expanded(child: FadeInSlide(index: 1, child: leftPane)),
-                                      const SizedBox(width: 16),
-                                      Expanded(child: FadeInSlide(index: 3, child: rightPane)),
+                                      SizedBox(height: 200, child: _buildSystemPowerCard(isDark)),
+                                      const SizedBox(height: 16),
+                                      SizedBox(height: 200, child: _buildFieldSelector(isDark)),
                                     ],
                                   ),
-                                  const SizedBox(height: 24),
-                                  FadeInSlide(index: 2, child: centerPane),
-                                ],
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  FadeInSlide(index: 1, child: leftPane),
-                                  const SizedBox(height: 24),
-                                  FadeInSlide(index: 3, child: rightPane),
-                                  const SizedBox(height: 24),
-                                  FadeInSlide(index: 2, child: centerPane),
-                                ],
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  flex: 4,
+                                  child: Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark))),
+                                          const SizedBox(width: 16),
+                                          Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark))),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      SizedBox(height: 200, child: _buildIrrigationControlArea(isDark)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  flex: 3,
+                                  child: SizedBox(height: 416, child: _buildRealWeatherCard(isDark, isDay)),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                SizedBox(height: 200, child: _buildSystemPowerCard(isDark)),
+                                const SizedBox(height: 16),
+                                SizedBox(height: 200, child: _buildFieldSelector(isDark)),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(child: SizedBox(height: 200, child: _buildShadeControlCard(isDark))),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: SizedBox(height: 200, child: _buildSprinklerControlCard(isDark))),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(height: 200, child: _buildIrrigationControlArea(isDark)),
+                                const SizedBox(height: 16),
+                                _buildRealWeatherCard(isDark, isDay), 
+                              ],
+                            ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32.0),
+                      child: FadeInSlide(
+                        index: 2,
+                        child: Row(
+                          children: [
+                            Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12, thickness: 1.5)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Text(
+                                "SENSOR DATAS".tr,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                  letterSpacing: 2.0,
+                                ),
                               ),
+                            ),
+                            Expanded(child: Divider(color: isDark ? Colors.white24 : Colors.black12, thickness: 1.5)),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    FadeInSlide(
+                      index: 3,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 500),
+                        child: _isSystemOn 
+                          ? Column(
+                              children: [
+                                if (isDesktop || isTablet) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(child: SizedBox(height: 220, child: _buildSoilCard(isDark))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 220, child: _buildDepthCard(isDark))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 220, child: _buildDhtCard(isDark))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 220, child: _buildLdrCard(isDark))),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      Expanded(child: SizedBox(height: 160, child: _buildBatteryCard(isDark, isDay))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 160, child: _buildRainCard(isDark))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 160, child: _buildWaterFlowCard(isDark))),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: SizedBox(height: 160, child: _buildFlowSummaryCard(isDark))),
+                                    ],
+                                  ),
+                                ] else ...[
+                                  SizedBox(height: 220, child: _buildSoilCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 220, child: _buildDepthCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildDhtCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildLdrCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildBatteryCard(isDark, isDay)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildRainCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildWaterFlowCard(isDark)),
+                                  const SizedBox(height: 16),
+                                  SizedBox(height: 180, child: _buildFlowSummaryCard(isDark)),
+                                ]
+                              ],
+                            )
+                          : _buildSystemOffPlaceholder(isDark),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2324,8 +1820,8 @@ class _WaterTank extends StatelessWidget {
     final clampedDepth = depthPercentage.clamp(0.0, 100.0) / 100.0;
 
     return Container(
-      width: 60,
-      height: 100,
+      width: 50,
+      height: 80,
       decoration: BoxDecoration(
         color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(12),
@@ -2340,33 +1836,15 @@ class _WaterTank extends StatelessWidget {
           AnimatedContainer(
             duration: const Duration(seconds: 1),
             curve: Curves.easeInOut,
-            height: 96 * clampedDepth,
+            height: 76 * clampedDepth,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.cyan.shade400.withOpacity(0.9),
+              color: Colors.blueAccent.shade400.withOpacity(0.9),
               borderRadius: BorderRadius.only(
                 bottomLeft: const Radius.circular(10),
                 bottomRight: const Radius.circular(10),
                 topLeft: Radius.circular(clampedDepth > 0.95 ? 10 : 0),
                 topRight: Radius.circular(clampedDepth > 0.95 ? 10 : 0),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 4,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                4,
-                (index) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width: 4,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-                    shape: BoxShape.circle,
-                  ),
-                ),
               ),
             ),
           ),
@@ -2422,7 +1900,7 @@ class _SpinningMotorState extends State<_SpinningMotor>
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: widget.isRunning
-            ? Colors.greenAccent.withOpacity(0.2)
+            ? Colors.blueAccent.withOpacity(0.2)
             : Colors.grey.withOpacity(0.2),
         shape: BoxShape.circle,
       ),
@@ -2436,8 +1914,8 @@ class _SpinningMotorState extends State<_SpinningMotor>
         },
         child: Icon(
           Icons.settings,
-          color: widget.isRunning ? Colors.greenAccent.shade700 : Colors.grey,
-          size: 20,
+          color: widget.isRunning ? Colors.blueAccent.shade400 : Colors.grey,
+          size: 16,
         ),
       ),
     );
@@ -2504,14 +1982,14 @@ class _RainIndicatorState extends State<_RainIndicator>
       children: [
         Icon(
           widget.intensity < 3000 ? Icons.cloud : Icons.cloud_off_rounded,
-          size: 40,
+          size: 32,
           color: widget.intensity < 3000
-              ? Colors.cyan.shade300
+              ? Colors.blueAccent.shade200
               : (isDark ? Colors.grey.shade600 : Colors.grey.shade500),
         ),
         if (widget.intensity < 3000)
           Positioned(
-            top: 35,
+            top: 28,
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, child) {
@@ -2519,19 +1997,19 @@ class _RainIndicatorState extends State<_RainIndicator>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(3, (index) {
                     double delay = index * 0.3;
-                    double yPos = ((_controller.value + delay) % 1.0) * 20;
+                    double yPos = ((_controller.value + delay) % 1.0) * 15;
                     double opacity = 1.0 - ((_controller.value + delay) % 1.0);
                     return Transform.translate(
                       offset: Offset(
-                        index == 1 ? 0 : (index == 0 ? -10 : 10),
+                        index == 1 ? 0 : (index == 0 ? -8 : 8),
                         yPos,
                       ),
                       child: Opacity(
                         opacity: opacity.clamp(0.0, 1.0),
                         child: Container(
                           width: 2,
-                          height: 8,
-                          color: Colors.cyan.shade400,
+                          height: 6,
+                          color: Colors.blueAccent.shade400,
                         ),
                       ),
                     );
@@ -2560,7 +2038,7 @@ class _GaugePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
-    const strokeWidth = 10.0;
+    const strokeWidth = 8.0;
     const startAngle = 2.5;
     const sweepAngle = 4.4;
 
@@ -2598,121 +2076,5 @@ class _GaugePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _GaugePainter oldDelegate) {
     return oldDelegate.percentage != percentage || oldDelegate.isDark != isDark;
-  }
-}
-
-class _ShadeAnimation extends StatelessWidget {
-  final bool isDeployed;
-  const _ShadeAnimation({required this.isDeployed});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final frameColor = isDark ? Colors.white.withOpacity(0.3) : Colors.black.withOpacity(0.3);
-    final groundColor = isDark ? const Color(0xFF3F2A14).withOpacity(0.8) : const Color(0xFF8B5A2B).withOpacity(0.8);
-    final shadeColor = isDark ? const Color(0xFF111111).withOpacity(0.9) : const Color(0xFF333333).withOpacity(0.9);
-
-    return Container(
-      width: 100,
-      height: 50,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.3) : Colors.white.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: frameColor, width: 1.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Container(color: isDark ? Colors.black26 : Colors.cyan.shade100.withOpacity(0.5)),
-              ),
-              Expanded(
-                flex: 1,
-                child: Container(color: groundColor),
-              ),
-            ],
-          ),
-          Positioned(
-            bottom: 6,
-            left: 40,
-            child: Icon(
-              Icons.yard_rounded,
-              color: Colors.greenAccent.shade700,
-              size: 24,
-            ),
-          ),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeInOut,
-            opacity: isDeployed ? 0.5 : 0.0,
-            child: Positioned(
-              bottom: 2,
-              left: 10,
-              right: 10,
-              height: 10,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeInOutCubic,
-            top: 0,
-            bottom: 10,
-            left: isDeployed ? 0 : -90,
-            width: 85,
-            child: Container(
-              decoration: BoxDecoration(
-                color: shadeColor,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(4),
-                  bottomRight: Radius.circular(4),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 4,
-                    offset: const Offset(2, 2),
-                  )
-                ],
-              ),
-              child: Row(
-                children: List.generate(5, (index) => Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 1, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-                )),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 2,
-            top: 2,
-            bottom: 10,
-            width: 3,
-            child: Container(color: frameColor),
-          ),
-          Positioned(
-            right: 2,
-            top: 2,
-            bottom: 10,
-            width: 3,
-            child: Container(color: frameColor),
-          ),
-        ],
-      ),
-    );
   }
 }
