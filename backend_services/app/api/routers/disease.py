@@ -11,7 +11,6 @@ load_dotenv()
 client = genai.Client(api_key="AIzaSyAch8pw_39y8Zt0mNuE5Iko5NqxDwpRQ-I")
 
 router = APIRouter(tags=["Disease Prediction"])
-
 def clean_json_response(text: str) -> str:
     text = text.strip()
     if text.startswith("```json"):
@@ -22,19 +21,20 @@ def clean_json_response(text: str) -> str:
         text = text[:-3]
     return text.strip()
 
-@router.post("/predict")
+@router.post("/api/predict")
 async def predict(file: UploadFile = File(...)):
     try:
         image_data = await file.read()
-        clean_diagnosis, details = predict_disease(image_data)
-
-        return {
-            "diagnosis": clean_diagnosis,
-            "details": details
-        }
+        result = predict_disease(image_data)
+        return result
     except Exception as e:
         print(f"Prediction Error: {e}")
-        return {"diagnosis": f"Error processing image: {str(e)}", "details": {}}
+        return {
+            "status": "error",
+            "message": f"Error processing image: {str(e)}",
+            "diagnosis": "Error",
+            "details": {}
+        }
     
 
 # Add this mapping dictionary near the top of your file (under your imports)

@@ -151,16 +151,22 @@ class _CropDoctorScreenState extends State<CropDoctorScreen> {
   }
 
   Future<void> _analyzeImage(Uint8List imageBytes) async {
-    setState(() => _isAnalyzing = true);
+    setState(() {
+      _isAnalyzing = true;
+    });
 
     try {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://${AppConfig.serverIp}:8000/predict'),
+        Uri.parse('${AppConfig.baseUrl}/predict'),
       );
 
       request.files.add(
-        http.MultipartFile.fromBytes('file', imageBytes, filename: 'upload.jpg'),
+        http.MultipartFile.fromBytes(
+          'file',
+          imageBytes,
+          filename: 'upload.jpg',
+        ),
       );
 
       final response = await request.send();
@@ -168,17 +174,35 @@ class _CropDoctorScreenState extends State<CropDoctorScreen> {
 
       if (response.statusCode == 200) {
         final decoded = json.decode(responseData);
+        
         setState(() {
-          _diagnosisResult = decoded['diagnosis'];
-          _diseaseDetails = decoded['details'];
+          // --- THE FIX: Safely handling the new Gatekeeper responses ---
+          if (decoded.containsKey('status') && 
+             (decoded['status'] == 'rejected' || decoded['status'] == 'uncertain')) {
+            
+            // This displays the "Not a leaf" or "Uncertain" message on screen
+            _diagnosisResult = decoded['message']; 
+            _diseaseDetails = null;
+            
+          } else {
+            // This displays the normal diagnosis if it passes the gatekeeper
+            _diagnosisResult = decoded['diagnosis'] ?? "Disease Detected";
+            _diseaseDetails = decoded['details'];
+          }
         });
       } else {
-        setState(() => _diagnosisResult = "Error: Server returned ${response.statusCode}");
+        setState(() {
+          _diagnosisResult = "Error: Server returned ${response.statusCode}";
+        });
       }
     } catch (e) {
-      setState(() => _diagnosisResult = "Connection Error. Check server IP.");
+      setState(() {
+        _diagnosisResult = "Connection Error. Check server IP.";
+      });
     } finally {
-      setState(() => _isAnalyzing = false);
+      setState(() {
+        _isAnalyzing = false;
+      });
     }
   }
 

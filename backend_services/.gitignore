@@ -1,5 +1,6 @@
 venv/
 dataset/
-ml_models/
 **/__pycache__/
 /.env
+leaf_vs_not_leaf_dataset/
+ml_models/
