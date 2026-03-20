@@ -513,9 +513,9 @@ class _MarketScreenState extends State<MarketScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.blueAccent.withOpacity(0.1) : Colors.blueAccent.withOpacity(0.05),
+                    color: isDark ? const Color(0xFF064E3B).withOpacity(0.1) : const Color(0xFF064E3B).withOpacity(0.05),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDark ? Colors.blueAccent.withOpacity(0.3) : Colors.blueAccent.withOpacity(0.2)),
+                    border: Border.all(color: isDark ? const Color(0xFF064E3B).withOpacity(0.3) : const Color(0xFF064E3B).withOpacity(0.2)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -523,7 +523,7 @@ class _MarketScreenState extends State<MarketScreen> {
                       Icon(
                         Icons.auto_awesome,
                         size: 18,
-                        color: Colors.blueAccent.shade400,
+                        color: Colors.blueAccent.shade700,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -735,7 +735,7 @@ class _MarketScreenState extends State<MarketScreen> {
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.blueAccent.shade400,
+                                color: const Color(0xFF064E3B) ,
                               ),
                             ),
                             Text(
@@ -854,7 +854,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                               "Tap for cost breakdown".tr,
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.blueAccent.shade400,
+                                                color: const Color(0xFF064E3B) ,
                                                 fontStyle: FontStyle.italic,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -866,7 +866,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.blueAccent.shade400,
+                                            color: const Color(0xFF064E3B) ,
                                           ),
                                         ),
                                       ],
@@ -883,7 +883,7 @@ class _MarketScreenState extends State<MarketScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent.shade400,
+                          backgroundColor: const Color(0xFF064E3B) ,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
@@ -1102,7 +1102,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                         IconButton(
                                           icon: Icon(
                                             Icons.add_circle_outline,
-                                            color: Colors.blueAccent.shade400,
+                                            color: const Color(0xFF064E3B),
                                             size: 28,
                                           ),
                                           onPressed: _showAddCropDialog,
@@ -1192,7 +1192,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                     const SizedBox(height: 24),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent.shade400,
+                                        backgroundColor: const Color(0xFF064E3B),
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 24,
@@ -1294,7 +1294,7 @@ class _MarketScreenState extends State<MarketScreen> {
                           : (cropNames.isNotEmpty ? cropNames.first : null),
                       icon: Icon(
                         Icons.keyboard_arrow_down_rounded,
-                        color: Colors.blueAccent.shade400,
+                        color: const Color(0xFF064E3B),
                       ),
                       style: TextStyle(
                         fontSize: 16,
@@ -1341,12 +1341,12 @@ class _MarketScreenState extends State<MarketScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withOpacity(0.15),
+                            color: const Color(0xFF064E3B).withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             Icons.storefront_rounded,
-                            color: Colors.blueAccent.shade400,
+                            color: const Color(0xFF064E3B),
                             size: 32,
                           ),
                         ),
@@ -1368,14 +1368,14 @@ class _MarketScreenState extends State<MarketScreen> {
                                   Icon(
                                     Icons.auto_awesome,
                                     size: 14,
-                                    color: Colors.blueAccent.shade400,
+                                    color: const Color(0xFF064E3B) ,
                                   ),
                                   const SizedBox(width: 4),
                                   Expanded(
                                     child: Text(
                                       "Top 3 Local Avg: ₹${optimalHub!['AvgPricePerKg'].toStringAsFixed(2)} / kg",
                                       style: TextStyle(
-                                        color: Colors.blueAccent.shade400,
+                                        color: const Color(0xFF064E3B) ,
                                         fontSize: 13,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1394,7 +1394,7 @@ class _MarketScreenState extends State<MarketScreen> {
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
-                                color: Colors.blueAccent.shade400,
+                                color: const Color(0xFF064E3B) ,
                               ),
                             ),
                             Text(
@@ -1502,7 +1502,7 @@ class _MarketScreenState extends State<MarketScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 15,
-                          color: Theme.of(context).textTheme.bodyLarge!.color,
+                          color: const Color(0xFF064E3B),
                         ),
                       ),
                       const SizedBox(height: 6),

@@ -1,7 +1,11 @@
 import 'dart:ui';
+import 'dart:convert';
+import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../main.dart';
 import '../core/translations.dart';
+import '../core/globals.dart'; 
 import 'sensors_screen.dart';
 import 'crop_doctor_screen.dart';
 import 'market_screen.dart';
@@ -35,6 +39,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _triggerDemoNotification();
     });
+    _fetchInitialProfile();
+  }
+
+  Future<void> _fetchInitialProfile() async {
+    try {
+      final response = await http.get(Uri.parse('http://127.0.0.1:8000/api/get_profile'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          final user = data['user'];
+          
+          currentUserName.value = user['name'] ?? "Unknown";
+          currentUserEmail.value = user['email'] ?? "Unknown";
+          currentUserPhone.value = user['phone'] ?? "Unknown";
+          currentUserLocation.value = user['location'] ?? "Unknown";
+          
+          if (user['profile_pic_base64'] != null) {
+            userProfileImageNotifier.value = base64Decode(user['profile_pic_base64']);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching initial profile: $e");
+    }
   }
 
   void _triggerDemoNotification() async {
@@ -264,35 +292,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             title: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(Icons.eco, color: const Color(0xFF2C6339), size: 26),
-                    Positioned(
-                      bottom: -2,
-                      child: Icon(Icons.change_history, color: const Color(0xFF2C6339), size: 14),
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Theme.of(context).textTheme.bodyLarge!.color,
+                      letterSpacing: -0.8,
                     ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  "Agro",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: Theme.of(context).textTheme.bodyLarge!.color,
-                    letterSpacing: -0.5,
+                    children: const [
+                      TextSpan(
+                        text: "A",
+                        style: TextStyle(fontSize: 44), 
+                      ),
+                      TextSpan(
+                        text: "gro",
+                        style: TextStyle(fontSize: 34),
+                      ),
+                      TextSpan(
+                        text: "Sync",
+                        style: TextStyle(
+                          fontSize: 34,
+                          color: Color(0xFF2C6339),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Text(
-                  "Sync",
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF2C6339),
-                    letterSpacing: -0.5,
-                  ),
+                const SizedBox(width: 12),
+                // Increased the size of the image from 38 to 48
+                Image.asset(
+                  'assets/plant_icon.png', 
+                  width: 78, 
+                  height: 78,
+                  fit: BoxFit.contain,
                 ),
               ],
             ),
@@ -336,19 +370,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
               const SizedBox(width: 12),
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF1E6B52), width: 2),
-                ),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: isDark ? Colors.white : Colors.black87,
-                    size: 24,
+              GestureDetector(
+                onTap: () {
+                  openEditProfileNotifier.value = true;
+                  _onItemTapped(3); 
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF1E6B52), width: 2),
+                  ),
+                  child: ValueListenableBuilder<Uint8List?>(
+                    valueListenable: userProfileImageNotifier,
+                    builder: (context, imageBytes, child) {
+                      return CircleAvatar(
+                        radius: 18,
+                        backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                        backgroundImage: imageBytes != null ? MemoryImage(imageBytes) : null,
+                        child: imageBytes == null 
+                            ? Icon(Icons.person_rounded, color: isDark ? Colors.white : Colors.black87, size: 24)
+                            : null,
+                      );
+                    },
                   ),
                 ),
               ),

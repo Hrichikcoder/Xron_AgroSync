@@ -45,74 +45,77 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.15),
-                      blurRadius: 35,
-                      offset: const Offset(0, 15),
-                    ),
-                  ],
+          // 1. We wrap the Column in a SingleChildScrollView
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(), 
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/plant_icon.png',
+                  width: 250, 
+                  height: 250,
+                  fit: BoxFit.contain,
                 ),
-                child: Icon(
-                  Icons.spa_rounded,
-                  size: 80,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "Agro",
+                                
+                // Name "AgroSync" below the image
+                RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
                     style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       color: Theme.of(context).textTheme.bodyLarge!.color,
-                      letterSpacing: -0.5,
+                      letterSpacing: -0.8,
                     ),
+                    children: [
+                      const TextSpan(
+                        text: "A",
+                        style: TextStyle(fontSize: 60), 
+                      ),
+                      const TextSpan(
+                        text: "gro",
+                        style: TextStyle(fontSize: 48),
+                      ),
+                      TextSpan(
+                        text: "Sync",
+                        style: TextStyle(
+                          fontSize: 48,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    "Sync",
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      color: Theme.of(context).colorScheme.primary,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "SMART FARM INTELLIGENCE".tr,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                  letterSpacing: 2.0,
-                  fontWeight: FontWeight.w600,
                 ),
-              ),
-              const SizedBox(height: 60),
-              const AgroPulseLoader(),
-            ],
+                
+                // Reduced from 48 down to 4
+                const SizedBox(height: 4),
+                
+                // The subtitle under the name
+                Text(
+                  "SMART FARM INTELLIGENCE".tr,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 2.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                
+                // Reduced from 60 down to 16
+                const SizedBox(height: 16),
+                
+                // Loading icon
+                const AgroPulseLoader(),
+              ],
+            ),
           ),
         ),
       ),
