@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/web_socket_channel.dart'; // NEW MODIFICATION
 import '../main.dart';
 import '../core/translations.dart';
 import '../core/globals.dart'; 
@@ -20,6 +21,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  WebSocketChannel? _channel; // NEW MODIFICATION
 
   List<Widget> get _screens => [
         const SensorsScreen(),
@@ -36,10 +38,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerDemoNotification();
-    });
+    _connectWebSocket(); // NEW MODIFICATION: Initializes real-time listener
     _fetchInitialProfile();
+  }
+
+  @override
+  void dispose() {
+    _channel?.sink.close(); // NEW MODIFICATION: Clean up connection when screen is closed
+    super.dispose();
+  }
+
+  // NEW MODIFICATION: WebSocket connection to FastAPI
+  void _connectWebSocket() {
+    try {
+      _channel = WebSocketChannel.connect(
+        Uri.parse('ws://127.0.0.1:8000/api/notifications/ws'), // Update IP if running on physical device
+      );
+
+      _channel!.stream.listen((message) {
+        final decodedMessage = jsonDecode(message);
+        
+        if (!mounted) return;
+
+        final newNotification = AppNotification(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: (decodedMessage['type'] == 'alert' ? "Critical Alert" : "System Update").tr,
+          message: (decodedMessage['message'] ?? "New event occurred").toString().tr,
+          timestamp: DateTime.now(),
+        );
+
+        final currentList = List<AppNotification>.from(SmartIrrigationApp.notificationsNotifier.value);
+        currentList.insert(0, newNotification);
+        SmartIrrigationApp.notificationsNotifier.value = currentList;
+
+        _showBottomPopupNotification();
+      }, onError: (error) {
+        debugPrint("WebSocket Error: $error");
+      });
+    } catch (e) {
+      debugPrint("WebSocket Connection Error: $e");
+    }
   }
 
   Future<void> _fetchInitialProfile() async {
@@ -63,24 +101,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       debugPrint("Error fetching initial profile: $e");
     }
-  }
-
-  void _triggerDemoNotification() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
-    final newNotification = AppNotification(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: "Critical Alert".tr,
-      message: "Water level dropping rapidly in Sector 4.".tr,
-      timestamp: DateTime.now(),
-    );
-
-    final currentList = List<AppNotification>.from(SmartIrrigationApp.notificationsNotifier.value);
-    currentList.insert(0, newNotification);
-    SmartIrrigationApp.notificationsNotifier.value = currentList;
-
-    _showBottomPopupNotification();
   }
 
   void _showBottomPopupNotification() {
