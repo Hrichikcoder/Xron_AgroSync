@@ -17,4 +17,6 @@ class Settings:
     DISEASE_MODEL_PATH = os.path.join(BASE_DIR, "ml_models", "plant_disease_model_finetuned.pth")
     MARKET_MODEL_PATH = os.path.join(BASE_DIR, "ml_models", "price_prediction_model.json")
 
+    POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:password@localhost:5432/agrosync_db")
+    
 settings = Settings()
