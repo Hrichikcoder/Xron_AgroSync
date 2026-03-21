@@ -1,3 +1,4 @@
+import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,15 +8,21 @@ from PIL import Image
 import io
 import os
 from app.core.config import settings
-from app.data.disease_db import class_names, disease_details_db
+from app.data.disease_db import disease_details_db
 
 DISEASE_MODEL_PATH = 'ml_models/plant_disease_model_finetuned.pth'
 LEAF_DETECTOR_PATH = 'ml_models/leaf_detector_binary.pth'
-NUM_DISEASE_CLASSES = 52
+CLASSES_JSON_PATH = 'ml_models/plantdoc_classes.json'
 
-state_dict = torch.load(DISEASE_MODEL_PATH, map_location=torch.device('cpu'), weights_only=True)
+with open(CLASSES_JSON_PATH, 'r') as f:
+    dynamic_class_names = json.load(f)
+
+NUM_DISEASE_CLASSES = len(dynamic_class_names)
+
 disease_model = models.resnet34(weights=None)
 disease_model.fc = nn.Linear(disease_model.fc.in_features, NUM_DISEASE_CLASSES)
+
+state_dict = torch.load(DISEASE_MODEL_PATH, map_location=torch.device('cpu'), weights_only=True)
 disease_model.load_state_dict(state_dict)
 disease_model.eval()
 
@@ -23,7 +30,7 @@ leaf_detector = models.mobilenet_v2()
 leaf_detector.classifier[1] = nn.Linear(leaf_detector.last_channel, 1)
 
 if os.path.exists(LEAF_DETECTOR_PATH):
-    leaf_detector.load_state_dict(torch.load(LEAF_DETECTOR_PATH, map_location=torch.device('cpu')))
+    leaf_detector.load_state_dict(torch.load(LEAF_DETECTOR_PATH, map_location=torch.device('cpu'), weights_only=True))
 
 leaf_detector.eval()
 
@@ -58,15 +65,15 @@ def predict_disease(image_bytes: bytes):
         max_prob, predicted = torch.max(probabilities, 1)
         class_idx = predicted.item()
 
-    if max_prob.item() < 0.80:
+    if max_prob.item() > 0.80:
         return {
             "status": "uncertain",
             "message": "The system is unsure. Please try a clearer photo or a different angle.",
             "confidence": round(max_prob.item(), 2)
         }
 
-    if class_idx < len(class_names):
-        raw_diagnosis = class_names[class_idx]
+    if class_idx < len(dynamic_class_names):
+        raw_diagnosis = dynamic_class_names[class_idx]
         clean_diagnosis = raw_diagnosis.replace("__", " - ").replace("_", " ")
         details = disease_details_db.get(raw_diagnosis, {
             "type": "Data Unavailable",
