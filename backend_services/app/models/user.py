@@ -11,3 +11,10 @@ class UserProfile(Base):
     phone = Column(String)
     location = Column(String)
     profile_pic = Column(LargeBinary, nullable=True) # Stores image byte data
+
+class FarmField(Base):
+    __tablename__ = "farm_fields"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    area = Column(String)

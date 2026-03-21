@@ -39,12 +39,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   final String apiUrl = "http://127.0.0.1:8000/api";
 
-  final List<Map<String, String>> _fields = [
-    {"name": "North Plot A", "area": "4.5 Acres"},
-    {"name": "South Plot B", "area": "2.1 Acres"},
-    {"name": "Greenhouse 1", "area": "800 sq.m"},
-    {"name": "East Field", "area": "5.0 Acres"},
-  ];
+  // Dynamic Fields List
+  List<Map<String, dynamic>> _fields = [];
 
   final Map<String, List<String>> _languageGroups = {
     "Global": ["English"],
@@ -57,7 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchProfileFromDatabase(); // Fetch dynamically on load
+    _fetchProfileFromDatabase(); 
+    _fetchFieldsFromDatabase(); // Fetch fields on load
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (openEditProfileNotifier.value) {
@@ -67,7 +64,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  // Dynamic Fetch from PostgreSQL
+  // Fetch Fields from Database
+  Future<void> _fetchFieldsFromDatabase() async {
+    try {
+      final response = await http.get(Uri.parse('$apiUrl/get_fields'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          setState(() {
+            _fields = List<Map<String, dynamic>>.from(data['fields']);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching fields: $e");
+    }
+  }
+
+  // Dynamic Fetch Profile from PostgreSQL
   Future<void> _fetchProfileFromDatabase() async {
     try {
       final response = await http.get(Uri.parse('$apiUrl/get_profile'));
@@ -85,7 +99,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _isLoadingProfile = false;
             });
             
-            // Update Global DP so dashboard sees it too
             if (user['profile_pic_base64'] != null) {
               userProfileImageNotifier.value = base64Decode(user['profile_pic_base64']);
             }
@@ -248,15 +261,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _userEmail = emailController.text;
                         _userPhone = phoneController.text;
                         _userLocation = locationController.text;
-                        userProfileImageNotifier.value = tempImageBytes; // Update Global DP
+                        userProfileImageNotifier.value = tempImageBytes; 
                         
-                        // Update global variables dynamically too
                         currentUserName.value = nameController.text;
                         currentUserEmail.value = emailController.text;
                         currentUserPhone.value = phoneController.text;
                         currentUserLocation.value = locationController.text;
                       });
-                      _saveProfileToDatabase(tempImageBytes); // Save to Backend DB
+                      _saveProfileToDatabase(tempImageBytes); 
                       Navigator.pop(context);
                     },
                     child: Text("Save Changes".tr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -447,23 +459,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: ListTile(
                                 leading: Icon(Icons.landscape_rounded, color: Colors.blueAccent.shade400),
                                 title: Text(
-                                  _fields[index]["name"]!,
+                                  _fields[index]["name"].toString(),
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: isDark ? Colors.white : Colors.black87,
                                   ),
                                 ),
                                 subtitle: Text(
-                                  _fields[index]["area"]!,
+                                  _fields[index]["area"].toString(),
                                   style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                 ),
                                 trailing: IconButton(
                                   icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                                  onPressed: () {
+                                  onPressed: () async {
+                                    final fieldId = _fields[index]["id"];
+                                    
+                                    // Optimistically remove from UI
                                     setStateDialog(() {
                                       _fields.removeAt(index);
                                     });
                                     setState(() {});
+
+                                    // Call API to delete from DB
+                                    try {
+                                      await http.delete(Uri.parse('$apiUrl/delete_field/$fieldId'));
+                                    } catch (e) {
+                                      debugPrint("Failed to delete field: $e");
+                                      _fetchFieldsFromDatabase(); // Revert on failure
+                                    }
                                   },
                                 ),
                               ),
@@ -536,16 +559,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 backgroundColor: Colors.blueAccent.shade400,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: () {
+              onPressed: () async {
                 if (nameController.text.isNotEmpty && areaController.text.isNotEmpty) {
-                  setParentDialogState(() {
-                    _fields.add({
-                      "name": nameController.text,
-                      "area": areaController.text,
-                    });
-                  });
-                  setState(() {});
-                  Navigator.pop(context);
+                  final newName = nameController.text;
+                  final newArea = areaController.text;
+                  Navigator.pop(context); // Close dialog immediately
+
+                  try {
+                    final response = await http.post(
+                      Uri.parse('$apiUrl/add_field'),
+                      headers: {'Content-Type': 'application/json'},
+                      body: json.encode({'name': newName, 'area': newArea}),
+                    );
+
+                    if (response.statusCode == 200) {
+                      final data = json.decode(response.body);
+                      setParentDialogState(() {
+                        _fields.add({
+                          "id": data['field']['id'],
+                          "name": newName,
+                          "area": newArea,
+                        });
+                      });
+                      setState(() {});
+                    }
+                  } catch (e) {
+                    debugPrint("Error saving field: $e");
+                  }
                 }
               },
               child: Text("Add".tr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

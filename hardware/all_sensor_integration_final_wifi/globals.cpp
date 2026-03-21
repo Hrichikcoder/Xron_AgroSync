@@ -16,7 +16,7 @@ const int DEPTH_SENSOR_PIN = 34;
 const int CAP_SENSOR_PIN = 32; 
 const int FLOW_SENSOR_PIN = 27; 
 const int SERVO_PIN = 4;
-const int SPRINKLER_PIN = 25; // Define Sprinkler Pin
+const int SPRINKLER_PIN = 25; 
 
 // Environmental Sensor Setup
 DHT dht(DHTPIN, DHTTYPE);
@@ -37,7 +37,7 @@ bool manualSprinkler = false;
 int currentServoAngle = 0;
 int targetServoAngle = 0;
 unsigned long lastServoMoveTime = 0;
-const int servoMoveDelay = 15; // Delay in ms per degree for slow rotation
+const int servoMoveDelay = 15; 
 
 unsigned long lastOverrideCheck = 0;
 const unsigned long overrideInterval = 3000; 
@@ -47,20 +47,24 @@ float targetVolume = 500.0;
 float currentVolume = 0.0;         
 float lastCycleVolume = 0.0;       
 bool targetVolumeReached = false;
+unsigned long lastFlowMillis = 0;
+float currentFlowRate = 0.0; 
+const float calibrationFactor = 4.5;
 
 // Flow Sensor Interrupt Variables
 volatile unsigned long pulseCount = 0; 
-float mlPerPulse = 2.22;
+float mlPerPulse = 0.0; 
 
-// Timers
+// --- Timers ---
 unsigned long lastPrintTime = 0;
 const unsigned long printInterval = 1000;
 
 unsigned long lastEnvPrintTime = 0;
-const unsigned long envPrintInterval = 30000; 
+// CHANGED: Reduced to 5 seconds (5000ms) for fast-paced demo so ML updates quickly!
+const unsigned long envPrintInterval = 5000; 
 
 unsigned long pump2StartTime = 0;
-const unsigned long pump2RunDuration = 15000; 
+const unsigned long pump2RunDuration = 18000;
 
 unsigned long volumeReachedTime = 0;
-const unsigned long restartDelay = 10000;
+const unsigned long restartDelay = 5000;

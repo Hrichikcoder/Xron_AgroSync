@@ -3,6 +3,6 @@
 
 void checkBackendOverride();
 void printEnvironmentSensors();
-void sendSensorDataToBackend(float temp, float hum, int ldr, int cap, int rain, int depth, float flow);
+void sendSensorDataToBackend(float temp, float hum, int ldr, int cap, int rain, int depth, float flow, float flow_rate);
 
 #endif

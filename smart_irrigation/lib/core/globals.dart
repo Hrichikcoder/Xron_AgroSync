@@ -14,3 +14,5 @@ final ValueNotifier<String> currentUserName = ValueNotifier("Loading...");
 final ValueNotifier<String> currentUserEmail = ValueNotifier("Loading...");
 final ValueNotifier<String> currentUserPhone = ValueNotifier("Loading...");
 final ValueNotifier<String> currentUserLocation = ValueNotifier("Loading...");
+// ADD THIS TO THE BOTTOM OF lib/core/globals.dart
+final ValueNotifier<Map<String, String>> globalFarmFieldsNotifier = ValueNotifier({});

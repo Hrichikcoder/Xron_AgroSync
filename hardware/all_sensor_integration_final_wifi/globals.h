@@ -50,6 +50,9 @@ extern bool targetVolumeReached;
 // --- Flow Sensor Interrupt Variables ---
 extern volatile unsigned long pulseCount;
 extern float mlPerPulse;
+extern unsigned long lastFlowMillis; // <-- ADD THIS
+extern float currentFlowRate;        // <-- ADD THIS
+extern const float calibrationFactor; // <-- ADD THIS
 
 // --- Timers ---
 extern unsigned long lastPrintTime;

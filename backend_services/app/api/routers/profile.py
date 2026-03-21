@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 from app.db.postgres import get_db
 from app.models.user import UserProfile
+from pydantic import BaseModel
+from app.models.user import FarmField
 import base64
 import traceback
 
@@ -70,3 +72,53 @@ async def update_profile(
         # THIS PRINTS THE EXACT CRASH REASON TO YOUR TERMINAL
         print(f"\n--- ERROR IN UPDATE_PROFILE ---\n{traceback.format_exc()}\n-------------------------------\n")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+# Create a Pydantic schema for input validation
+class FieldCreate(BaseModel):
+    name: str
+    area: str
+
+# ADD THESE ROUTES
+@router.get("/get_fields")
+async def get_fields(db: Session = Depends(get_db)):
+    try:
+        fields = db.query(FarmField).all()
+        return {
+            "status": "success", 
+            "fields": [{"id": f.id, "name": f.name, "area": f.area} for f in fields]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/add_field")
+async def add_field(field: FieldCreate, db: Session = Depends(get_db)):
+    try:
+        new_field = FarmField(name=field.name, area=field.area)
+        db.add(new_field)
+        db.commit()
+        return {"status": "success", "field": {"id": new_field.id, "name": new_field.name, "area": new_field.area}}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/delete_field/{field_id}")
+async def delete_field(field_id: int, db: Session = Depends(get_db)):
+    try:
+        db.query(FarmField).filter(FarmField.id == field_id).delete()
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Add to routers/profile.py (or a new settings router)
+from pydantic import BaseModel
+import app.core.state as state
+
+class ActiveFieldPayload(BaseModel):
+    area_acres: float
+
+@router.post("/set_active_field")
+async def set_active_field(payload: ActiveFieldPayload):
+    state.active_field_area_cm2 = payload.area_acres
+    return {"status": "success", "active_area_cm2": state.active_field_area_cm2}

@@ -5,12 +5,17 @@
 
 // Define new global variables for the servo here
 bool manualShade = false;
-bool lastShadeState = false; // Tracks state to prevent continuous sweep looping
+bool lastShadeState = false; 
 Servo shadeServo;
+
+// --- Safe ESP32 Interrupt Handling ---
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
 // Interrupt Service Routine (ISR) for the Flow Sensor
 void IRAM_ATTR countPulse() {
+  portENTER_CRITICAL_ISR(&mux);
   pulseCount++;
+  portEXIT_CRITICAL_ISR(&mux);
 }
 
 void setup() {
@@ -22,7 +27,7 @@ void setup() {
   Serial.println("Step 1: Configuring Pins...");
   pinMode(PUMP1_PIN, OUTPUT);
   pinMode(PUMP2_PIN, OUTPUT);
-  pinMode(SPRINKLER_PIN, OUTPUT); // ADDED: Sprinkler Pin configuration
+  pinMode(SPRINKLER_PIN, OUTPUT); 
   pinMode(DEPTH_SENSOR_PIN, INPUT);
   pinMode(CAP_SENSOR_PIN, INPUT); 
   
@@ -41,7 +46,7 @@ void setup() {
   Serial.println("Step 2: Forcing Pumps to Initial OFF State...");
   digitalWrite(PUMP1_PIN, HIGH); 
   digitalWrite(PUMP2_PIN, HIGH);
-  digitalWrite(SPRINKLER_PIN, LOW); // Set to LOW for initial OFF state (Active-HIGH relay)
+  digitalWrite(SPRINKLER_PIN, LOW); 
   
   Serial.println("Step 3: Connecting to WiFi...");
   WiFi.disconnect(true);
@@ -61,15 +66,42 @@ void setup() {
   printEnvironmentSensors();
   lastEnvPrintTime = millis();
   lastOverrideCheck = millis();
+  lastFlowMillis = millis(); 
   
   Serial.println("Beginning Operations...");
   Serial.println("=====================================\n");
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+
+  // --- 1. Dedicated 1-Second Flow Calculation ---
+  if (currentMillis - lastFlowMillis >= 1000) {
+    unsigned long currentPulses = 0;
+
+    // Safely read and reset pulse count WITHOUT detaching the interrupt
+    portENTER_CRITICAL(&mux);
+    currentPulses = pulseCount;
+    pulseCount = 0;
+    portEXIT_CRITICAL(&mux);
+
+    // Calculate elapsed time precisely
+    float elapsedSeconds = (currentMillis - lastFlowMillis) / 1000.0;
+
+    // Calculate flow rate (L/min)
+    float frequency = currentPulses / elapsedSeconds;
+    currentFlowRate = frequency / calibrationFactor; 
+
+    // Calculate exact volume added based on pulses
+    float mlPerPulse = 1000.0 / (calibrationFactor * 60.0);
+    float volumeAdded = currentPulses * mlPerPulse;
+
+    currentVolume += volumeAdded;
+    lastFlowMillis = currentMillis; 
+  }
+
   int depthValue = analogRead(DEPTH_SENSOR_PIN);
   int capValue = analogRead(CAP_SENSOR_PIN);
-  unsigned long currentMillis = millis();
   
   // --- Fetch Backend Override Status (Every 3 seconds) ---
   if (currentMillis - lastOverrideCheck >= overrideInterval) {
@@ -80,25 +112,23 @@ void loop() {
   // --- Evaluate Shade Position ---
   if (manualShade != lastShadeState) {
     if (manualShade) {
-      // Deployed position: Fast sweep to 180 degrees
       for (int pos = 0; pos <= 180; pos += 2) { 
         shadeServo.write(pos);
         delay(5); 
       }
     } else {
-      // Retracted position: Fast sweep back to 0 degrees
       for (int pos = 180; pos >= 0; pos -= 2) { 
         shadeServo.write(pos);
         delay(5); 
       }
     }
-    lastShadeState = manualShade; // Lock in the current state
+    lastShadeState = manualShade; 
   }
 
-  // --- Evaluate Sprinkler State (Runs Independently) ---
-  digitalWrite(SPRINKLER_PIN, manualSprinkler ? HIGH : LOW); 
+  // --- Evaluate Sprinkler State ---
+  digitalWrite(SPRINKLER_PIN, manualSprinkler ? HIGH : LOW);
   
-  // --- Print & Transmit Environmental Sensors (Every 30 Seconds) ---
+  // --- Print & Transmit Environmental Sensors (Every 5 Seconds) ---
   if (currentMillis - lastEnvPrintTime >= envPrintInterval) {
     printEnvironmentSensors();
     float h = dht.readHumidity();
@@ -106,8 +136,7 @@ void loop() {
     int ldrValue = analogRead(LDR_PIN);
     int rainValue = analogRead(RAIN_PIN);
     
-    sendSensorDataToBackend(t, h, ldrValue, capValue, rainValue, depthValue, currentVolume);
-    
+    sendSensorDataToBackend(t, h, ldrValue, capValue, rainValue, depthValue, currentVolume, currentFlowRate);
     lastEnvPrintTime = currentMillis;
   }
   
@@ -119,11 +148,11 @@ void loop() {
      digitalWrite(PUMP2_PIN, manualPump2 ? LOW : HIGH);
      
      if (currentMillis - lastPrintTime >= printInterval) {
-        currentVolume = pulseCount * mlPerPulse; // Keep tracking flow if pump 1 is ON
         Serial.print("MODE: MANUAL | P1: ");
         Serial.print(manualPump1 ? "ON " : "OFF");
         Serial.print(" | P2: "); Serial.print(manualPump2 ? "ON " : "OFF");
-        Serial.print(" | SPRK: "); Serial.print(manualSprinkler ? "ON " : "OFF"); 
+        Serial.print(" | SPRK: ");
+        Serial.print(manualSprinkler ? "ON " : "OFF"); 
         Serial.print(" | Delivered Vol: "); Serial.println(currentVolume);
         lastPrintTime = currentMillis;
      }
@@ -135,7 +164,6 @@ void loop() {
   // AUTO MODE LOGIC
   // ==========================================
 
-  // --- PHASE 1: Managing Pump 1 & Monitoring ---
   if (currentPhase == 1) {
     
     if (depthValue <= 0) {
@@ -159,16 +187,14 @@ void loop() {
 
     if (!pump1Running && targetVolumeReached) {
       if (currentMillis - volumeReachedTime >= restartDelay) {
-        lastCycleVolume = currentVolume; // Store amount of last cycle before resetting
+        lastCycleVolume = currentVolume; 
 
         targetVolumeReached = false;
         currentVolume = 0.0;
-        pulseCount = 0;
         
-        targetVolume += 10.0;
         Serial.println("\n=====================================");
         Serial.println("Irrigation cycle completed successfully.");
-        Serial.println("System ready for next batch.");
+        Serial.println("System awaiting next sensor trigger...");
         Serial.println("=====================================\n");
       }
     }
@@ -182,7 +208,6 @@ void loop() {
     }
 
     if (currentMillis - lastPrintTime >= printInterval) {
-      currentVolume = pulseCount * mlPerPulse;
       float volumeLeft = targetVolume - currentVolume;
       if (volumeLeft < 0) volumeLeft = 0;
       Serial.print("STEP: Phase 1 | Pump 1: ");
@@ -191,6 +216,8 @@ void loop() {
       Serial.print(" | Cap: "); Serial.print(capValue);
       Serial.print(" | Delivered: ");
       Serial.print(currentVolume);
+      Serial.print(" | Target: ");
+      Serial.print(targetVolume);
       Serial.print(" | Left: ");
       
       if (!pump1Running && targetVolumeReached) {
@@ -203,7 +230,6 @@ void loop() {
     }
   }
   
-  // --- PHASE 2: Pump 2 running (Filling) ---
   else if (currentPhase == 2) {
     digitalWrite(PUMP1_PIN, HIGH);
     digitalWrite(PUMP2_PIN, LOW);   
@@ -222,8 +248,7 @@ void loop() {
       
       currentPhase = 1;
       targetVolumeReached = false; 
-      currentVolume = 0.0;         
-      pulseCount = 0;              
+      currentVolume = 0.0;     
       
       Serial.println("\n=====================================");
       Serial.println("Refill phase completed. System resetting to Phase 1.");

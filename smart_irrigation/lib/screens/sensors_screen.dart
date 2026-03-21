@@ -32,10 +32,15 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Set<String> disabledSensors = {};
 
   Timer? _timer;
+  Timer? _flowTimer;
   String _sensorTemperature = "28.7";
   String _sensorHumidity = "63";
   String _sensorSoilMoisture = "45";
-  String _sensorWaterFlow = "7.0";
+  
+  // Flow Rate Variables
+  String _sensorWaterFlow = "0.0"; // Stores total volume
+  String _sensorWaterFlowRate = "0.00"; // Stores real-time mL/sec
+
   String _lastCycleVolume = "0.0";
   String _sensorLight = "850";
   String _sensorRain = "15";
@@ -53,26 +58,36 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   List<Map<String, dynamic>> _waterFlowHistory = [];
 
-  String _selectedField = "North Plot A";
-  final Map<String, String> _userFields = {
-    "North Plot A": "4.5 Acres",
-    "South Plot B": "2.1 Acres",
-    "Greenhouse 1": "800 sq.m",
-    "East Field": "5.0 Acres",
-  };
+  // Dynamic Variables for Fields
+  String? _selectedField; 
+  Map<String, String> _userFields = {}; 
 
   Offset _mousePosition = Offset.zero;
 
   @override
   void initState() {
     super.initState();
+    _fetchFields(); // Initial Fetch
     _fetchInitialHistory();
     _initLocationAndWeather();
     _fetchSensorData();
+    _fetchLiveFlowData();
+    // Timer checks every 3 seconds
     _timer = Timer.periodic(
       const Duration(seconds: 3),
       (timer) {
-        if (_isSystemOn) _fetchSensorData();
+        if (_isSystemOn) {
+          _fetchSensorData();
+          _fetchFields(); // Keep fields dynamically updated!
+        }
+      },
+    );
+    _flowTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (_isSystemOn) {
+          _fetchLiveFlowData();
+        }
       },
     );
   }
@@ -81,6 +96,74 @@ class _SensorsScreenState extends State<SensorsScreen> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  // <--- ADD THIS NEW METHOD --->
+  Future<void> _fetchLiveFlowData() async {
+    try {
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/sensors/live_flow'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            _sensorWaterFlow = data['water_flow']?.toString() ?? "0.0";
+            _sensorWaterFlowRate = data['flow_rate']?.toString() ?? "0.00";
+            
+            // Animation strictly runs only when flow rate is greater than 0
+            _motorRunning = (double.tryParse(_sensorWaterFlowRate) ?? 0.0) > 0;
+          });
+        }
+      }
+    } catch (e) {
+      // Silently catch errors here to prevent console spam from the 1-second fast poller
+    }
+  }
+
+  Future<void> _updateActiveFieldInBackend(String fieldName) async {
+    // Extract the numeric area from the string "X Acres"
+    String areaStr = _userFields[fieldName]!.replaceAll(" Acres", "");
+    double areaAcres = double.tryParse(areaStr) ?? 0.0;
+
+    try {
+      await http.post(
+        Uri.parse('${AppConfig.baseUrl}/set_active_field'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'area_acres': areaAcres}),
+      );
+    } catch (e) {
+      debugPrint("Failed to update active field: $e");
+    }
+  }
+
+  Future<void> _fetchFields() async {
+    try {
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_fields'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          final List fields = data['fields'];
+          Map<String, String> fetchedFields = {};
+          
+          for (var field in fields) {
+            fetchedFields[field['name'].toString()] = "${field['area']} Acres";
+          }
+          
+          if (mounted) {
+            setState(() {
+              _userFields = fetchedFields;
+              
+              if (_userFields.isNotEmpty && (_selectedField == null || !_userFields.containsKey(_selectedField))) {
+                 _selectedField = _userFields.keys.first;
+              } else if (_userFields.isEmpty) {
+                 _selectedField = null;
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching fields for Dropdown: $e");
+    }
   }
 
   BoxDecoration _glassCardDecoration(bool isDark) {
@@ -366,8 +449,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   Future<void> _fetchSensorData() async {
     try {
-      final ctrlRes =
-          await http.get(Uri.parse('${AppConfig.baseUrl}/control/status'));
+      final ctrlRes = await http.get(Uri.parse('${AppConfig.baseUrl}/control/status'));
       if (ctrlRes.statusCode == 200) {
         final cData = json.decode(ctrlRes.body);
         if (mounted) {
@@ -377,24 +459,34 @@ class _SensorsScreenState extends State<SensorsScreen> {
             _pump2State = cData['pump2'] ?? false;
             isShadeDeployed = cData['shade'] ?? isShadeDeployed;
             isSprinklerActive = cData['sprinkler'] ?? isSprinklerActive;
-            _motorRunning = _pump1State || _pump2State;
           });
         }
       }
 
-      final response =
-          await http.get(Uri.parse('${AppConfig.baseUrl}/sensors/current'));
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/sensors/current'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (mounted) {
           setState(() {
             _sensorTemperature = data['temperature']?.toString() ?? "28.7";
-            _sensorHumidity = data['humidity']?.toString() ?? "63";
+            String rawHumStr = data['humidity']?.toString() ?? "63";
+            double parsedHum = double.tryParse(rawHumStr) ?? 0.0;
+            
+            if (parsedHum > 100.0) {
+              _sensorHumidity = "95";
+            } else {
+              _sensorHumidity = rawHumStr;
+            }
             _sensorSoilMoisture = data['soil_moisture']?.toString() ?? "45";
             _sensorLight = data['ldr']?.toString() ?? "850";
-            _sensorWaterFlow = data['water_flow']?.toString() ?? "7.0";
             _sensorRain = data['rain_level']?.toString() ?? "15";
             _sensorDepth = data['depth']?.toString() ?? "75";
+            
+            // -------------------------------------------------------------
+            // REAL-TIME WATER FLOW & RATE LOGIC
+            // -------------------------------------------------------------
+            
+            // -------------------------------------------------------------
 
             if (data['last_cycle_volume'] != null) {
               String newLcv = data['last_cycle_volume'].toString();
@@ -402,20 +494,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
               double oLcv = double.tryParse(_lastCycleVolume) ?? 0.0;
 
               if (nLcv > 0 && nLcv != oLcv) {
-                _waterFlowHistory
-                    .insert(0, {'amount': nLcv, 'time': DateTime.now()});
+                _waterFlowHistory.insert(0, {'amount': nLcv, 'time': DateTime.now()});
               }
               _lastCycleVolume = newLcv;
-            }
-
-            if (_pumpMode == 'auto') {
-              if (data['motor'] != null) {
-                _motorRunning = data['motor'] == true || data['motor'] == "true";
-              } else if (double.tryParse(_sensorWaterFlow)! > 0) {
-                _motorRunning = true;
-              } else {
-                _motorRunning = false;
-              }
             }
           });
         }
@@ -846,7 +927,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
-                value: _selectedField,
+                value: _selectedField != null && _userFields.containsKey(_selectedField) ? _selectedField : null,
+                hint: Text("Select Field".tr, style: const TextStyle(color: Colors.white54)),
                 isExpanded: true,
                 dropdownColor: isDark ? const Color(0xFF0F172A) : const Color(0xFF15803D),
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
@@ -869,6 +951,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     setState(() {
                       _selectedField = newValue;
                     });
+                    _updateActiveFieldInBackend(newValue);
                   }
                 },
               ),
@@ -883,7 +966,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8)),
               ),
               Text(
-                _userFields[_selectedField] ?? "--",
+                _selectedField != null ? _userFields[_selectedField] ?? "--" : "--",
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
               ),
             ],
@@ -911,13 +994,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)], // Vibrant light green glow gradient
+                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)],
                 ),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6EE7B7).withOpacity(0.6), // Glowing effect
+                    color: const Color(0xFF6EE7B7).withOpacity(0.6),
                     blurRadius: 20,
                     spreadRadius: 2,
                     offset: const Offset(0, 8),
@@ -983,13 +1066,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)], // Vibrant light green glow gradient
+                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)],
                 ),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6EE7B7).withOpacity(0.6), // Glowing effect
+                    color: const Color(0xFF6EE7B7).withOpacity(0.6),
                     blurRadius: 20,
                     spreadRadius: 2,
                     offset: const Offset(0, 8),
@@ -1356,9 +1439,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Widget _buildBatteryCard(bool isDark, bool isDay) {
     double lightValue = double.tryParse(_sensorLight) ?? 0.0;
     String chargeStatus = "Not Charging".tr;
-    if (isDay) {
-      if (lightValue > 1500) chargeStatus = "Fast Charging".tr;
-      else if (lightValue > 500) chargeStatus = "Slow Charging".tr;
+    
+    // Battery charging solely based on direct LDR reading thresholds
+    if (lightValue >= 1500) {
+      chargeStatus = "Fast Charging".tr;
+    } else if (lightValue >= 300) {
+      chargeStatus = "Slow Charging".tr;
+    } else {
+      chargeStatus = "Not Charging".tr;
     }
 
     return Container(
@@ -1488,7 +1576,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: double.tryParse(_sensorWaterFlow) ?? 0.0),
+                  tween: Tween<double>(begin: 0, end: double.tryParse(_sensorWaterFlowRate) ?? 0.0),
                   duration: const Duration(seconds: 2),
                   curve: Curves.easeOut,
                   builder: (context, value, child) {
@@ -1539,8 +1627,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Widget _buildFlowSummaryCard(bool isDark) {
-    double totalFlow = _waterFlowHistory.fold(0.0, (sum, item) => sum + (item['amount'] as num).toDouble());
-    double lastVol = double.tryParse(_lastCycleVolume) ?? 0.0;
+    double totalFlow = _waterFlowHistory.fold(0.0, (sum, item) => sum + (item['amount'] as num).toDouble()) / 10.0;
+    double lastVol = (double.tryParse(_lastCycleVolume) ?? 0.0) / 10.0;
 
     return Container(
       padding: const EdgeInsets.all(16),

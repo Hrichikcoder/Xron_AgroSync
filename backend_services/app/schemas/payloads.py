@@ -9,7 +9,13 @@ class SensorData(BaseModel):
     rain_level: int
     depth_level: int
     water_flow: Optional[float] = 0.0
+    flow_rate: Optional[float] = 0.0
     last_cycle_volume: Optional[float] = 0.0
+    node_id: Optional[str] = "esp32_zone_1"
+
+class FlowData(BaseModel):
+    water_flow: float
+    flow_rate: float
     node_id: Optional[str] = "esp32_zone_1"
 
 class PredictionRequest(BaseModel):
