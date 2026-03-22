@@ -30,3 +30,11 @@ class PumpControl(BaseModel):
     pump2: bool = False
     shade: bool = False
     sprinkler: bool = False
+
+class FeedbackPayload(BaseModel):
+    user_id: str
+    crop_name: str
+    selling_price: float
+    market_name: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None

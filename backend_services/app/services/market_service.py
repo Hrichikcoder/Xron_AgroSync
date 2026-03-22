@@ -173,3 +173,63 @@ def update_market_summary_cache():
             
     set_cache("market_summary", summary_data, expire=86400)
     return summary_data
+
+def retrain_model_batch(db):
+    """
+    Batch trains the XGBoost model using all untrained crowdsourced data.
+    Call this weekly to safely update the model with new community data.
+    """
+    from app.models.market_data import CrowdsourcedPrice
+    
+    # 1. Fetch all records that haven't been trained on yet
+    untrained_records = db.query(CrowdsourcedPrice).filter(CrowdsourcedPrice.is_trained == False).all()
+    
+    if not untrained_records:
+        return {"message": "No new data to train on."}
+        
+    try:
+        expected_features = market_model.feature_names_in_ if hasattr(market_model, 'feature_names_in_') else market_model.get_booster().feature_names
+        
+        X_list = []
+        y_list = []
+        
+        # 2. Process all untrained records
+        for record in untrained_records:
+            latest_data = get_real_market_features(record.crop_name)
+            if latest_data.empty:
+                continue
+                
+            market_features = latest_data[latest_data['Market'].str.contains(record.market_name, case=False, na=False)]
+            
+            if market_features.empty:
+                latest_data['lat_diff'] = abs(latest_data['market_lat'] - float(record.lat))
+                latest_data['lon_diff'] = abs(latest_data['market_lon'] - float(record.lon))
+                latest_data['total_diff'] = latest_data['lat_diff'] + latest_data['lon_diff']
+                market_features = latest_data.sort_values('total_diff').head(1)
+                
+            X_row = market_features.reindex(expected_features).to_frame().T.astype(float).fillna(0)
+            X_list.append(X_row)
+            y_list.append(float(record.selling_price) * 10) # Convert 10kg price back to Quintal
+            
+            # Mark record as processed
+            record.is_trained = True
+
+        if not X_list:
+            return {"message": "Failed to map new records to model features."}
+
+        # 3. Combine into a single batch and train ONCE
+        X_batch = pd.concat(X_list, ignore_index=True)
+        y_batch = pd.Series(y_list)
+        
+        market_model.fit(X_batch, y_batch, xgb_model=settings.MARKET_MODEL_PATH)
+        market_model.save_model(settings.MARKET_MODEL_PATH)
+        
+        # 4. Save the "is_trained = True" flags to the database
+        db.commit()
+        print(f"✅ Model successfully batch-trained on {len(X_list)} new records.")
+        return {"message": f"Successfully trained on {len(X_list)} new records."}
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Failed to batch retrain model: {e}")
+        return {"error": str(e)}

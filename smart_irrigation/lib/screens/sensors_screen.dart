@@ -1151,16 +1151,16 @@ class _SensorsScreenState extends State<SensorsScreen> {
                 scale: 0.8,
                 child: Switch(
                   value: !isAuto,
-                  activeColor: Colors.orangeAccent,
+                  activeColor: const Color.fromARGB(255, 255, 242, 224),
                   inactiveThumbColor: const Color(0xFF064E3B),
-                  activeTrackColor: Colors.orangeAccent.withOpacity(0.3),
+                  activeTrackColor: const Color.fromARGB(255, 250, 241, 218).withOpacity(0.3),
                   inactiveTrackColor: Colors.white.withOpacity(0.3),
                   onChanged: (val) {
                     _updatePumpControl(val ? 'manual' : 'auto', false, false, isShadeDeployed, isSprinklerActive);
                   },
                 ),
               ),
-              Text("Manual", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: !isAuto ? Colors.orangeAccent : Colors.white54)),
+              Text("Manual", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: !isAuto ? const Color.fromARGB(255, 253, 253, 253) : Colors.white54)),
             ],
           ),
           const Spacer(),
