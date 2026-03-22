@@ -30,6 +30,11 @@ class _MarketScreenState extends State<MarketScreen> {
 
   TextEditingController searchController = TextEditingController();
   bool isLoading = true;
+  
+  // NEW VARIABLES FOR LIVE SEARCH
+  bool isSearchingLive = false;
+  Map<String, dynamic>? liveSearchResult;
+  String? liveSearchError;
 
   bool isHubLoading = false;
   String? selectedHubCrop;
@@ -215,7 +220,7 @@ class _MarketScreenState extends State<MarketScreen> {
           double avgPrice = top3.map((m) => m['Expected Price (Rs/Q)'] as num)
                                 .reduce((a, b) => a + b) / top3.length;
           
-          hubData['AvgPricePerKg'] = avgPrice / 100;
+          hubData['AvgPricePer10Kg'] = avgPrice / 10;
 
           setState(() {
             optimalHub = hubData;
@@ -231,10 +236,114 @@ class _MarketScreenState extends State<MarketScreen> {
     }
   }
 
+  Future<void> _performLiveSearch(String cropName) async {
+    setState(() {
+      isSearchingLive = true;
+      liveSearchError = null;
+      liveSearchResult = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/predict_markets'),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "crop": cropName.toUpperCase(),
+          "lat": farmerLat,
+          "lon": farmerLon,
+          "transport_rate": 2.5,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['recommendations'] != null && data['recommendations'].isNotEmpty) {
+          
+          List<dynamic> top3 = (data['recommendations'] as List).take(3).toList();
+          double avgPrice = top3.map((m) => m['Expected Price (Rs/Q)'] as num)
+                                .reduce((a, b) => a + b) / top3.length;
+          
+          String displayCrop = cropName.substring(0, 1).toUpperCase() + cropName.substring(1).toLowerCase();
+          
+          setState(() {
+            liveSearchResult = {
+              "crop": displayCrop,
+              "price": avgPrice.round(),
+              "trend": "Live Search",
+              "color": Colors.blueAccent,
+              "detail": "Live search result. Not saved to tracking list.",
+              "markets": data['recommendations'] // Pre-populate to save an API call
+            };
+          });
+        } else {
+          setState(() => liveSearchError = "No market data found for '$cropName'.");
+        }
+      } else {
+         setState(() => liveSearchError = "API Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      setState(() => liveSearchError = "Network error. Backend unreachable.");
+    } finally {
+      setState(() => isSearchingLive = false);
+    }
+  }
+
+  Future<void> _trackLiveSearchResult() async {
+    if (liveSearchResult == null) return;
+    setState(() => isLoading = true); 
+    
+    String cropName = liveSearchResult!['crop'];
+    String currentUserId = '1';
+    
+    // Save to PostgreSQL DB
+    try {
+      await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/user/crops/add'),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "user_id": currentUserId,
+          "crop_name": cropName,
+        }),
+      );
+    } catch (e) {
+      debugPrint("Failed to save to DB: $e");
+    }
+    
+    // Update local UI
+    setState(() {
+      liveSearchResult!['trend'] = "+0.0%"; // Reset to standard trend text
+      liveSearchResult!['detail'] = "Custom user tracked crop.";
+      
+      userAddedCrops.add(liveSearchResult!);
+      allCrops.insert(0, liveSearchResult!);
+      selectedHubCrop = cropName;
+      
+      liveSearchResult = null;
+      searchController.clear();
+      _filterCrops("");
+      isLoading = false;
+    });
+    
+    _fetchOptimalHubForSelectedCrop();
+  }
+
   Future<void> _addNewCrop(String cropName) async {
     setState(() => isLoading = true);
-
+    String currentUserId = '1';
     int newPrice = 2000;
+
+    try {
+      await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/user/crops/add'),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "user_id": currentUserId,
+          "crop_name": cropName,
+        }),
+      );
+    } catch (e) {
+      debugPrint("Failed to save to DB: $e");
+    }
 
     try {
       final response = await http.post(
@@ -283,7 +392,18 @@ class _MarketScreenState extends State<MarketScreen> {
     _fetchOptimalHubForSelectedCrop();
   }
 
-  void _deleteCrop(Map<String, dynamic> item) {
+  void _deleteCrop(Map<String, dynamic> item) async{
+    String currentUserId = '1';
+    String cropToRemove = item['crop'];
+
+    try {
+      await http.delete(
+        Uri.parse('http://127.0.0.1:8000/api/user/$currentUserId/crops/$cropToRemove'),
+      );
+    } catch (e) {
+      debugPrint("Failed to delete from DB");
+    }
+
     setState(() {
       allCrops.remove(item);
       userAddedCrops.remove(item);
@@ -384,32 +504,32 @@ class _MarketScreenState extends State<MarketScreen> {
 
   Future<void> _loadData() async {
     setState(() => isLoading = true);
-
-    try {
-      final response = await http.get(Uri.parse('http://127.0.0.1:8000/api/markets/summary'));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> summary = data['summary'] ?? [];
+    String currentUserId = '1';
+     try {
+        final response = await http.get(
+          Uri.parse('http://127.0.0.1:8000/api/user/$currentUserId/markets/summary')
+        );
         
-        List<Map<String, dynamic>> apiData = summary.map((item) {
-          return {
-            "crop": item["crop"],
-            "price": (item["price"] * 100).round(), 
-            "trend": item["trend"],
-            "color": Colors.blueAccent,
-            "detail": item["detail"],
-          };
-        }).toList();
-        
-        apiData.insertAll(0, userAddedCrops);
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          final List<dynamic> summary = data['summary'] ?? [];
+          
+          List<Map<String, dynamic>> apiData = summary.map((item) {
+            return {
+              "crop": item["crop"],
+              "price": (item["price"] * 100).round(), 
+              "trend": item["trend"],
+              "color": Colors.blueAccent,
+              "detail": item["detail"],
+            };
+          }).toList();
 
-        setState(() {
-          allCrops = apiData;
-          selectedHubCrop ??= (allCrops.isNotEmpty ? allCrops.first['crop'] : null);
-          _filterCrops(searchController.text);
-          isLoading = false;
-        });
+          setState(() {
+            allCrops = apiData;
+            selectedHubCrop ??= (allCrops.isNotEmpty ? allCrops.first['crop'] : null);
+            _filterCrops(searchController.text);
+            isLoading = false;
+          });
 
         if (selectedHubCrop != null) {
           _fetchOptimalHubForSelectedCrop();
@@ -453,6 +573,10 @@ class _MarketScreenState extends State<MarketScreen> {
   void _showMarketBreakdown(BuildContext context, dynamic market) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     bool hasLocation = market['market_lat'] != null && market['market_lon'] != null;
+    
+    // Logic for Loss vs Profit
+    double netProfit = market['Net Profit (Rs)'] / 10;
+    bool isLoss = netProfit < 0;
 
     showDialog(
       context: context,
@@ -487,15 +611,15 @@ class _MarketScreenState extends State<MarketScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildBreakdownRow(
-                  "Expected Price (per kg)".tr,
-                  "₹${(market['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)}",
+                  "Expected Price (per 10 kg)".tr,
+                  "₹${(market['Expected Price (Rs/Q)'] / 10).toStringAsFixed(2)}",
                   isDark,
                   isPositive: true,
                 ),
                 const SizedBox(height: 12),
                 _buildBreakdownRow(
-                  "Est. Transport (per kg)".tr,
-                  "- ₹${(market['Transport Cost (Rs)'] / 100).toStringAsFixed(2)}",
+                  "Est. Transport (per 10 kg)".tr,
+                  "- ₹${(market['Transport Cost (Rs)'] / 10).toStringAsFixed(2)}",
                   isDark,
                   isPositive: false,
                 ),
@@ -504,10 +628,11 @@ class _MarketScreenState extends State<MarketScreen> {
                   child: Divider(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
                 ),
                 _buildBreakdownRow(
-                  "Net Profit (per kg)".tr,
-                  "₹${(market['Net Profit (Rs)'] / 100).toStringAsFixed(2)}",
+                  isLoss ? "Net Loss (per 10 kg)".tr : "Net Profit (per 10 kg)".tr,
+                  "${isLoss ? '-' : ''}₹${netProfit.abs().toStringAsFixed(2)}",
                   isDark,
                   isTotal: true,
+                  isLoss: isLoss,
                 ),
                 const SizedBox(height: 20),
                 Container(
@@ -594,6 +719,7 @@ class _MarketScreenState extends State<MarketScreen> {
     bool isDark, {
     bool isPositive = true,
     bool isTotal = false,
+    bool isLoss = false,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -604,7 +730,7 @@ class _MarketScreenState extends State<MarketScreen> {
             fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
             fontSize: isTotal ? 14 : 13,
             color: isTotal
-                ? (isDark ? Colors.white : Colors.black87)
+                ? (isLoss ? Colors.redAccent.shade400 : (isDark ? Colors.white : Colors.black87))
                 : Colors.grey.shade500,
           ),
         ),
@@ -614,7 +740,7 @@ class _MarketScreenState extends State<MarketScreen> {
             fontWeight: isTotal ? FontWeight.w900 : FontWeight.bold,
             fontSize: isTotal ? 16 : 14,
             color: isTotal
-                ? Colors.blueAccent.shade400
+                ? (isLoss ? Colors.redAccent.shade400 : const Color(0xFF064E3B))
                 : (isPositive
                       ? (isDark ? Colors.grey.shade300 : Colors.black87)
                       : Colors.red.shade400),
@@ -731,7 +857,7 @@ class _MarketScreenState extends State<MarketScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              "₹${(avgPrice / 100).toStringAsFixed(2)} / kg",
+                              "₹${(avgPrice / 10).toStringAsFixed(2)} / 10 kg",
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w900,
@@ -796,85 +922,91 @@ class _MarketScreenState extends State<MarketScreen> {
                     else
                       ...recommendedMarkets
                           .map(
-                            (m) => GestureDetector(
-                              onTap: () => _showMarketBreakdown(context, m),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.white.withOpacity(0.03)
-                                      : Colors.white.withOpacity(0.6),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
+                            (m) {
+                              // Loss vs Profit Check for each recommended market
+                              double marketProfit = m['Net Profit (Rs)'] / 10;
+                              bool isMarketLoss = marketProfit < 0;
+
+                              return GestureDetector(
+                                onTap: () => _showMarketBreakdown(context, m),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
                                     color: isDark
-                                        ? Colors.white.withOpacity(0.08)
-                                        : Colors.white.withOpacity(0.4),
+                                        ? Colors.white.withOpacity(0.03)
+                                        : Colors.white.withOpacity(0.6),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white.withOpacity(0.08)
+                                          : Colors.white.withOpacity(0.4),
+                                    ),
                                   ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            "${m['Market']}, ${m['State']}",
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              "${m['Market']}, ${m['State']}",
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            "₹${(m['Expected Price (Rs/Q)'] / 10).toStringAsFixed(2)} / 10 kg",
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
+                                              fontWeight: FontWeight.w900,
                                               fontSize: 15,
                                             ),
                                           ),
-                                        ),
-                                        Text(
-                                          "₹${(m['Expected Price (Rs/Q)'] / 100).toStringAsFixed(2)} / kg",
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.info_outline,
-                                              size: 14,
-                                              color: Colors.blueAccent.shade400,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              "Tap for cost breakdown".tr,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: const Color(0xFF064E3B) ,
-                                                fontStyle: FontStyle.italic,
-                                                fontWeight: FontWeight.bold,
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.info_outline,
+                                                size: 14,
+                                                color: Colors.blueAccent.shade400,
                                               ),
-                                            ),
-                                          ],
-                                        ),
-                                        Text(
-                                          "${'Net Profit:'.tr} ₹${(m['Net Profit (Rs)'] / 100).toStringAsFixed(2)} / kg",
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: const Color(0xFF064E3B) ,
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                "Tap for cost breakdown".tr,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: const Color(0xFF064E3B) ,
+                                                  fontStyle: FontStyle.italic,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                          Text(
+                                            "${isMarketLoss ? 'Net Loss:'.tr : 'Net Profit:'.tr} ${isMarketLoss ? '-' : ''}₹${marketProfit.abs().toStringAsFixed(2)} / 10 kg",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: isMarketLoss ? Colors.redAccent.shade400 : const Color(0xFF064E3B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ),
+                              );
+                            }
                           )
                           .toList(),
 
@@ -1087,7 +1219,7 @@ class _MarketScreenState extends State<MarketScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          "* Global Average per Kilogram (kg)".tr,
+                                          "* Global Average per 10 Kilograms (10 kg)".tr,
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: Colors.grey.shade500,
@@ -1122,10 +1254,18 @@ class _MarketScreenState extends State<MarketScreen> {
                                 const SizedBox(height: 16),
                                 TextField(
                                   controller: searchController,
+                                  textInputAction: TextInputAction.search,
                                   onChanged: (val) {
                                     setState(() {
                                       _filterCrops(val);
+                                      liveSearchResult = null; 
+                                      liveSearchError = null;
                                     });
+                                  },
+                                  onSubmitted: (val) {
+                                    if (displayedCrops.isEmpty && val.trim().isNotEmpty) {
+                                      _performLiveSearch(val.trim());
+                                    }
                                   },
                                   style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyLarge!.color),
                                   decoration: InputDecoration(
@@ -1170,57 +1310,99 @@ class _MarketScreenState extends State<MarketScreen> {
                               ),
                             )
                           else if (displayedCrops.isEmpty)
-                            Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(32.0),
-                                child: Column(
-                                  children: [
-                                    Icon(
-                                      Icons.search_off,
-                                      size: 48,
-                                      color: Colors.grey.shade400,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      "${'No crops found matching '.tr}'${searchController.text}'",
-                                      style: TextStyle(
-                                        color: Colors.grey.shade500,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF064E3B),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                        ),
-                                      ),
-                                      icon: const Icon(
-                                        Icons.add_circle_outline,
-                                        size: 20,
-                                      ),
-                                      label: Text(
-                                        "${'Track '.tr}'${searchController.text}'",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      onPressed: () {
-                                        _addNewCrop(searchController.text.trim());
-                                      },
-                                    ),
-                                  ],
+                            if (isSearchingLive)
+                              Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32.0),
+                                  child: AgroPulseLoader(message: "Searching Live Markets for '${searchController.text}'...".tr),
                                 ),
-                              ),
-                            )
+                              )
+                            else if (liveSearchResult != null)
+                              Column(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        "Live Search Result:".tr,
+                                        style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  _buildMarketPriceRow(liveSearchResult!, isDark, isLiveSearch: true),
+                                  const SizedBox(height: 16),
+                                  Wrap(
+                                      alignment: WrapAlignment.center,
+                                      spacing: 16,
+                                      runSpacing: 16,
+                                      children: [
+                                        OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.blueAccent.shade400,
+                                            side: BorderSide(color: Colors.blueAccent.shade400, width: 1.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          ),
+                                          icon: const Icon(Icons.analytics_outlined, size: 20),
+                                          label: Text(
+                                            "${'Live Search '.tr}'${searchController.text}'",
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                          onPressed: () {
+                                            String query = searchController.text.trim();
+                                            if (query.isNotEmpty) {
+                                              String displayCrop = query.substring(0, 1).toUpperCase() + query.substring(1).toLowerCase();
+                                              _showCropDetails({
+                                                "crop": displayCrop,
+                                                "trend": "Live Search",
+                                              });
+                                            }
+                                          },
+                                        ),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF064E3B),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          ),
+                                          icon: const Icon(Icons.add_circle_outline, size: 20),
+                                          label: Text(
+                                            "${'Track '.tr}'${searchController.text}'",
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                          onPressed: _trackLiveSearchResult,
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              )
+                            else
+                              Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(32.0),
+                                  child: Column(
+                                    children: [
+                                      Icon(Icons.search, size: 48, color: Colors.grey.shade400),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        "${'No local crops match '.tr}'${searchController.text}'",
+                                        style: TextStyle(color: Colors.grey.shade500, fontSize: 14, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Press Enter on your keyboard to fetch live data.".tr,
+                                        style: TextStyle(color: Colors.blueAccent.shade400, fontSize: 12, fontStyle: FontStyle.italic),
+                                      ),
+                                      if (liveSearchError != null) ...[
+                                        const SizedBox(height: 16),
+                                        Text(liveSearchError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                      ]
+                                    ],
+                                  ),
+                                ),
+                              )
                           else
                             Column(
                               children: displayedCrops.asMap().entries.map((entry) {
@@ -1333,82 +1515,89 @@ class _MarketScreenState extends State<MarketScreen> {
                     ),
                   )
                 : optimalHub != null
-                ? InkWell(
-                    onTap: () => _showMarketBreakdown(context, optimalHub),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF064E3B).withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.storefront_rounded,
-                            color: const Color(0xFF064E3B),
-                            size: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                optimalHub!['Market'] ?? "Unknown Market".tr,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
+                ? Builder(
+                    builder: (context) {
+                      double hubNetProfit = optimalHub!['Net Profit (Rs)'] / 10;
+                      bool isHubLoss = hubNetProfit < 0;
+
+                      return InkWell(
+                        onTap: () => _showMarketBreakdown(context, optimalHub),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF064E3B).withOpacity(0.15),
+                                shape: BoxShape.circle,
                               ),
-                              const SizedBox(height: 6),
-                              Row(
+                              child: Icon(
+                                Icons.storefront_rounded,
+                                color: const Color(0xFF064E3B),
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(
-                                    Icons.auto_awesome,
-                                    size: 14,
-                                    color: const Color(0xFF064E3B) ,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      "Top 3 Local Avg: ₹${optimalHub!['AvgPricePerKg'].toStringAsFixed(2)} / kg",
-                                      style: TextStyle(
-                                        color: const Color(0xFF064E3B) ,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  Text(
+                                    optimalHub!['Market'] ?? "Unknown Market".tr,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
                                     ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.auto_awesome,
+                                        size: 14,
+                                        color: const Color(0xFF064E3B) ,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          "Top 3 Local Avg: ₹${optimalHub!['AvgPricePer10Kg'].toStringAsFixed(2)} / 10 kg",
+                                          style: TextStyle(
+                                            color: const Color(0xFF064E3B) ,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              "₹${(optimalHub!['Net Profit (Rs)'] / 100).toStringAsFixed(2)}",
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF064E3B) ,
-                              ),
                             ),
-                            Text(
-                              "Net Profit / kg".tr,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade500,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  "${isHubLoss ? '-' : ''}₹${hubNetProfit.abs().toStringAsFixed(2)}",
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    color: isHubLoss ? Colors.redAccent.shade400 : const Color(0xFF064E3B) ,
+                                  ),
+                                ),
+                                Text(
+                                  (isHubLoss ? "Net Loss / 10 kg" : "Net Profit / 10 kg").tr,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isHubLoss ? Colors.redAccent.shade400 : Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      );
+                    }
                   )
                 : Center(
                     child: Text(
@@ -1426,7 +1615,7 @@ class _MarketScreenState extends State<MarketScreen> {
     );
   }
 
-  Widget _buildMarketPriceRow(Map<String, dynamic> item, bool isDark) {
+  Widget _buildMarketPriceRow(Map<String, dynamic> item, bool isDark, {bool isLiveSearch = false}) {
     bool isPositive = item['trend'].startsWith('+');
     bool isNeutral = item['trend'].startsWith('0');
     bool isStarred = starredCrops.contains(item['crop']);
@@ -1446,23 +1635,26 @@ class _MarketScreenState extends State<MarketScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        if (isStarred) {
-                          starredCrops.remove(item['crop']);
-                        } else {
-                          starredCrops.add(item['crop']);
-                        }
-                        _filterCrops(searchController.text);
-                      });
-                    },
-                    child: Icon(
-                      isStarred ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: isStarred ? Colors.amber.shade400 : Colors.grey.shade400,
-                      size: 24,
-                    ),
-                  ),
+                  if (!isLiveSearch)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isStarred) {
+                            starredCrops.remove(item['crop']);
+                          } else {
+                            starredCrops.add(item['crop']);
+                          }
+                          _filterCrops(searchController.text);
+                        });
+                      },
+                      child: Icon(
+                        isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                        color: isStarred ? Colors.amber.shade400 : Colors.grey.shade400,
+                        size: 24,
+                      ),
+                    )
+                  else
+                    Icon(Icons.cloud_outlined, color: Colors.blueAccent.shade400, size: 24),
                   const SizedBox(width: 16),
                   Container(
                     width: 36,
@@ -1498,7 +1690,7 @@ class _MarketScreenState extends State<MarketScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        "₹${(item['price'] / 100).toStringAsFixed(2)} / kg",
+                        "₹${(item['price'] / 10).toStringAsFixed(2)} / 10 kg",
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 15,
@@ -1547,16 +1739,17 @@ class _MarketScreenState extends State<MarketScreen> {
                     ],
                   ),
                   const SizedBox(width: 12),
-                  IconButton(
-                    icon: Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.redAccent.shade400,
-                      size: 22,
+                  if (!isLiveSearch)
+                    IconButton(
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.redAccent.shade400,
+                        size: 22,
+                      ),
+                      onPressed: () => _deleteCrop(item),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
                     ),
-                    onPressed: () => _deleteCrop(item),
-                    constraints: const BoxConstraints(),
-                    padding: EdgeInsets.zero,
-                  ),
                 ],
               ),
             ),
