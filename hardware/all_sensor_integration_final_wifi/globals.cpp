@@ -8,6 +8,7 @@ const char* password = SECRET_PASS;
 // --- Backend Configuration ---
 const char* backendUrl = SECRET_BACKEND_URL; 
 const char* overrideUrl = SECRET_OVERRIDE_URL;
+const char* notificationUrl = SECRET_NOTIFICATION_URL;
 
 // Define Pin Connections
 const int PUMP1_PIN = 13;

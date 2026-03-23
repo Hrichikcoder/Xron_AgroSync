@@ -115,3 +115,32 @@ void sendSensorDataToBackend(float temp, float hum, int ldr, int cap, int rain, 
     Serial.println("WiFi Disconnected. Cannot send data.");
   }
 }
+
+void sendNotification(String message, String type) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(notificationUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    StaticJsonDocument<256> doc;
+    doc["message"] = message;
+    doc["type"] = type;
+    doc["node_id"] = "esp32_zone_1"; // Matches your Python schema default
+
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpResponseCode = http.POST(requestBody);
+    
+    if (httpResponseCode > 0) {
+      Serial.println("[NOTIFICATION SENT] " + message);
+    } else {
+      Serial.print("[NOTIFICATION FAILED] HTTP Code: ");
+      Serial.println(httpResponseCode);
+    }
+    
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected. Cannot send notification.");
+  }
+}

@@ -11,7 +11,7 @@ import 'sensors_screen.dart';
 import 'crop_doctor_screen.dart';
 import 'market_screen.dart';
 import 'settings_screen.dart';
-
+import '../core/app_config.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -40,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _connectWebSocket(); // NEW MODIFICATION: Initializes real-time listener
     _fetchInitialProfile();
+    _fetchNotificationHistory();
   }
 
   @override
@@ -52,7 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _connectWebSocket() {
     try {
       _channel = WebSocketChannel.connect(
-        Uri.parse('ws://127.0.0.1:8000/api/notifications/ws'), // Update IP if running on physical device
+        Uri.parse('ws://${AppConfig.serverIp}:8000/api/notifications/ws'), // Update IP if running on physical device
       );
 
       _channel!.stream.listen((message) {
@@ -79,10 +80,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint("WebSocket Connection Error: $e");
     }
   }
+  Future<void> _fetchNotificationHistory() async {
+    try {
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/notifications/history'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          final List notifications = data['notifications'];
+          
+          final List<AppNotification> historyList = notifications.map((n) => AppNotification(
+            id: n['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            title: (n['type'] == 'alert' ? "Critical Alert" : "System Update").tr,
+            message: (n['message'] ?? "Event occurred").toString().tr,
+            timestamp: n['timestamp'] != null ? DateTime.parse(n['timestamp']) : DateTime.now(),
+            isRead: false, // You can update this based on local storage later
+          )).toList();
+
+          if (mounted) {
+            SmartIrrigationApp.notificationsNotifier.value = historyList;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching notification history: $e");
+    }
+  }
 
   Future<void> _fetchInitialProfile() async {
     try {
-      final response = await http.get(Uri.parse('http://127.0.0.1:8000/api/get_profile'));
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_profile'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {

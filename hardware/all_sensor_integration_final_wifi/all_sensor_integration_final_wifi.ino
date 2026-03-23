@@ -173,6 +173,7 @@ void loop() {
       digitalWrite(PUMP2_PIN, LOW);
       pump2StartTime = millis();
       Serial.println("\n*** URGENT NOTIFICATION: Depth reached 0! ***");
+      sendNotification("URGENT: Water Tank Depth reached 0! Refill Pump Started.", "alert");
       Serial.println("Emergency Stop: Pump 1 | Starting Pump 2...");
       return;
     }
@@ -194,6 +195,7 @@ void loop() {
         
         Serial.println("\n=====================================");
         Serial.println("Irrigation cycle completed successfully.");
+        sendNotification("Irrigation cycle completed successfully.", "info");
         Serial.println("System awaiting next sensor trigger...");
         Serial.println("=====================================\n");
       }

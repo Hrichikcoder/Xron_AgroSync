@@ -10,6 +10,7 @@ extern const char* ssid;
 extern const char* password;
 extern const char* backendUrl;
 extern const char* overrideUrl;
+extern const char* notificationUrl;
 
 // --- Define Pin Connections ---
 extern const int PUMP1_PIN;

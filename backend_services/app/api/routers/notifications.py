@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List
+from datetime import datetime
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -10,7 +11,10 @@ class NotificationPayload(BaseModel):
     type: str = "alert" # "alert", "info", "warning"
     node_id: str = "esp32_zone_1"
 
-# Connection manager to handle active frontend WebSocket connections
+# --- NEW: In-Memory Storage for Notification History ---
+# For production, replace this list with a database table insertion
+notification_history = [] 
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -28,20 +32,32 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# 1. Endpoint for the Frontend to connect to (Real-time stream)
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Keep connection alive
             await websocket.receive_text() 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-# 2. Endpoint for the ESP32 to send alerts to
 @router.post("/send")
 async def receive_notification_from_esp32(notification: NotificationPayload):
-    # Broadcast the ESP32 message directly to all connected frontends
-    await manager.broadcast(notification.dict())
+    # 1. Create the notification object with a timestamp
+    notif_data = notification.dict()
+    notif_data["timestamp"] = datetime.now().isoformat()
+    notif_data["id"] = str(int(datetime.now().timestamp() * 1000))
+
+    # 2. Save it to history (keeping only the latest 50 for memory safety)
+    notification_history.insert(0, notif_data)
+    if len(notification_history) > 50:
+        notification_history.pop()
+
+    # 3. Broadcast to currently connected apps
+    await manager.broadcast(notif_data)
     return {"status": "Notification broadcasted successfully"}
+
+# --- NEW ENDPOINT: Fetch history on App Load ---
+@router.get("/history")
+async def get_notification_history():
+    return {"status": "success", "notifications": notification_history}
