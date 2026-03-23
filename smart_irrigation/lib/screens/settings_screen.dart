@@ -8,7 +8,8 @@ import '../widgets/bouncing_button.dart';
 import '../widgets/fade_in_slide.dart';
 import '../core/translations.dart';
 import '../core/globals.dart';
-
+import 'system_diagnostics_dialog.dart';
+import '../core/app_config.dart';
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
@@ -36,8 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userEmail = "Loading...";
   String _userPhone = "Loading...";
   String _userLocation = "Loading...";
-
-  final String apiUrl = "http://127.0.0.1:8000/api";
 
   // Dynamic Fields List
   List<Map<String, dynamic>> _fields = [];
@@ -67,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Fetch Fields from Database
   Future<void> _fetchFieldsFromDatabase() async {
     try {
-      final response = await http.get(Uri.parse('$apiUrl/get_fields'));
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_fields'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {
@@ -84,7 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Dynamic Fetch Profile from PostgreSQL
   Future<void> _fetchProfileFromDatabase() async {
     try {
-      final response = await http.get(Uri.parse('$apiUrl/get_profile'));
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_profile'));
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -122,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       var request = http.MultipartRequest(
         'POST', 
-        Uri.parse('$apiUrl/update_profile') 
+        Uri.parse('${AppConfig.baseUrl}/update_profile') 
       );
 
       request.fields['name'] = _userName;
@@ -482,7 +481,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                                     // Call API to delete from DB
                                     try {
-                                      await http.delete(Uri.parse('$apiUrl/delete_field/$fieldId'));
+                                      await http.delete(Uri.parse('${AppConfig.baseUrl}/delete_field/$fieldId'));
                                     } catch (e) {
                                       debugPrint("Failed to delete field: $e");
                                       _fetchFieldsFromDatabase(); // Revert on failure
@@ -567,7 +566,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   try {
                     final response = await http.post(
-                      Uri.parse('$apiUrl/add_field'),
+                      Uri.parse('${AppConfig.baseUrl}/add_field'),
                       headers: {'Content-Type': 'application/json'},
                       body: json.encode({'name': newName, 'area': newArea}),
                     );
@@ -1023,7 +1022,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "System Diagnostics",
             "Run a full check on all modules",
             Icons.health_and_safety_rounded,
-            () {},
+            
+            // 2. Change the empty () {} to call the imported file
+            () => showDiagnosticsDialog(context, isDark), 
+            
             isDark,
           ),
         ],
@@ -1043,14 +1045,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           "Settings".tr,
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 34,
             fontWeight: FontWeight.w900,
             color: isDark ? Colors.white : Colors.black87,
             letterSpacing: -0.5,
@@ -1158,7 +1156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const SizedBox(height: 40),
                           Center(
                             child: Text(
-                              "AgroSync v2.4.1",
+                              "AgroSync - Developed by Team XRON",
                               style: TextStyle(
                                 color: isDark ? Colors.grey.shade600 : Colors.grey.shade500,
                                 fontWeight: FontWeight.bold,

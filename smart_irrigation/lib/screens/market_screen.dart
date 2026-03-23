@@ -13,6 +13,7 @@ import '../widgets/agro_pulse_loader.dart';
 import '../widgets/fade_in_slide.dart';
 import 'osm_search_screen.dart';
 import 'live_community_market.dart'; 
+import '../core/app_config.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -85,7 +86,7 @@ class _MarketScreenState extends State<MarketScreen> {
   Future<void> _fetchSellingPattern() async {
     String currentUserId = '1';
     try {
-      final response = await http.get(Uri.parse('http://127.0.0.1:8000/api/user/$currentUserId/selling_pattern'));
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/user/$currentUserId/selling_pattern'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['should_prompt'] == true) {
@@ -223,7 +224,7 @@ class _MarketScreenState extends State<MarketScreen> {
     setState(() => isHubLoading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/predict_markets'),
+        Uri.parse('${AppConfig.baseUrl}/predict_markets'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "crop": selectedHubCrop!.toUpperCase(),
@@ -270,7 +271,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/predict_markets'),
+        Uri.parse('${AppConfig.baseUrl}/predict_markets'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "crop": cropName.toUpperCase(),
@@ -323,7 +324,7 @@ class _MarketScreenState extends State<MarketScreen> {
     
     try {
       await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/user/crops/add'),
+        Uri.parse('${AppConfig.baseUrl}/user/crops/add'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "user_id": currentUserId,
@@ -362,7 +363,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
     try {
       await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/user/crops/star'),
+        Uri.parse('${AppConfig.baseUrl}/user/crops/star'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "user_id": "1", 
@@ -383,7 +384,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
     try {
       await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/user/crops/add'),
+        Uri.parse('${AppConfig.baseUrl}/user/crops/add'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "user_id": currentUserId,
@@ -396,7 +397,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/predict_markets'),
+        Uri.parse('${AppConfig.baseUrl}/predict_markets'),
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           "crop": cropName.toUpperCase(),
@@ -448,7 +449,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
     try {
       await http.delete(
-        Uri.parse('http://127.0.0.1:8000/api/user/$currentUserId/crops/$cropToRemove'),
+        Uri.parse('${AppConfig.baseUrl}/user/$currentUserId/crops/$cropToRemove'),
       );
     } catch (e) {
       debugPrint("Failed to delete from DB");
@@ -557,7 +558,7 @@ class _MarketScreenState extends State<MarketScreen> {
     String currentUserId = '1';
      try {
         final response = await http.get(
-          Uri.parse('http://127.0.0.1:8000/api/user/$currentUserId/markets/summary')
+          Uri.parse('${AppConfig.baseUrl}/user/$currentUserId/markets/summary')
         );
         
         if (response.statusCode == 200) {
@@ -610,9 +611,16 @@ class _MarketScreenState extends State<MarketScreen> {
     displayedCrops.sort((a, b) {
       bool aStarred = starredCrops.contains(a['crop']);
       bool bStarred = starredCrops.contains(b['crop']);
+      
+      // Primary sort: Starred crops stay at the top
       if (aStarred && !bStarred) return -1;
       if (!aStarred && bStarred) return 1;
-      return 0;
+      
+      // Secondary sort: Alphabetical order (A-Z)
+      String cropA = a['crop'].toString().toLowerCase();
+      String cropB = b['crop'].toString().toLowerCase();
+      
+      return cropA.compareTo(cropB);
     });
   }
 
@@ -816,7 +824,7 @@ class _MarketScreenState extends State<MarketScreen> {
               setModalState(() { isFetching = true; fetchError = ""; });
               try {
                 final response = await http.post(
-                  Uri.parse('http://127.0.0.1:8000/api/predict_markets'),
+                  Uri.parse('${AppConfig.baseUrl}/predict_markets'),
                   headers: {"Content-Type": "application/json"},
                   body: json.encode({
                     "crop": crop['crop'].toUpperCase(),
@@ -1206,7 +1214,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
                       try {
                         final response = await http.post(
-                          Uri.parse('http://127.0.0.1:8000/api/markets/feedback'),
+                          Uri.parse('${AppConfig.baseUrl}/markets/feedback'),
                           headers: {"Content-Type": "application/json"},
                           body: json.encode({
                             "user_id": "1", 

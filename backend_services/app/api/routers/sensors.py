@@ -16,6 +16,18 @@ async def update_flow(data: FlowData):
 @router.post("/update")
 async def update_sensors(data: SensorData):
     try:
+
+        state.live_sensor_data.update({
+            "temperature": data.temperature,
+            "humidity": data.humidity,
+            "ldr": data.ldr,
+            "soil_moisture": data.soil_moisture,
+            "rain_level": data.rain_level,
+            "depth_level": data.depth_level,
+            "water_flow": getattr(data, 'water_flow', 0.0),
+            "flow_rate": getattr(data, 'flow_rate', 0.0)
+        })
+
         state.current_water_flow = getattr(data, 'water_flow', 0.0)
         state.current_flow_rate = getattr(data, 'flow_rate', 0.0)
         
@@ -112,3 +124,12 @@ async def get_live_flow():
         "water_flow": state.current_water_flow,
         "flow_rate": state.current_flow_rate
     }
+
+
+@router.get("/live")
+async def get_live_sensor_data():
+    """
+    Returns the absolute latest data from the ESP32 in RAM.
+    Used by the App's Diagnostics screen and Live Dashboards.
+    """
+    return state.live_sensor_data

@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include "diagnostics.h"
 
 // Check Backend for Manual Control Overrides
 void checkBackendOverride() {
@@ -24,6 +25,10 @@ void checkBackendOverride() {
         manualShade = doc["shade"].as<bool>(); 
         manualSprinkler = doc["sprinkler"].as<bool>(); 
         
+        if (doc.containsKey("run_diag") && doc["run_diag"].as<bool>() == true) {
+            runSelfDiagnostics(); // Execute the Serial print sequence
+        }
+
         // ---> FETCH & SCALE THE ML TARGET VOLUME <---
         if (doc.containsKey("target_volume")) {
           float mlPrediction = doc["target_volume"].as<float>();

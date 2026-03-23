@@ -10,6 +10,7 @@ import '../core/translations.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/fade_in_slide.dart';
 import '../core/app_config.dart';
+import 'settings_screen.dart';
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({super.key});
@@ -95,11 +96,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _flowTimer?.cancel();
     super.dispose();
   }
 
-  // <--- ADD THIS NEW METHOD --->
   Future<void> _fetchLiveFlowData() async {
+    // Early exit: Prevent any fetching if the system is turned off
+    if (!_isSystemOn) return; 
+
     try {
       final response = await http.get(Uri.parse('${AppConfig.baseUrl}/sensors/live_flow'));
       if (response.statusCode == 200) {
@@ -136,6 +140,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Future<void> _fetchFields() async {
+    if (!_isSystemOn) return; // Stop fetching fields if system is off
+    
     try {
       final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_fields'));
       if (response.statusCode == 200) {
@@ -448,6 +454,9 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Future<void> _fetchSensorData() async {
+    // Early exit: Prevent any fetching if the system is turned off
+    if (!_isSystemOn) return; 
+
     try {
       final ctrlRes = await http.get(Uri.parse('${AppConfig.baseUrl}/control/status'));
       if (ctrlRes.statusCode == 200) {
@@ -482,12 +491,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
             _sensorRain = data['rain_level']?.toString() ?? "15";
             _sensorDepth = data['depth']?.toString() ?? "75";
             
-            // -------------------------------------------------------------
-            // REAL-TIME WATER FLOW & RATE LOGIC
-            // -------------------------------------------------------------
-            
-            // -------------------------------------------------------------
-
             if (data['last_cycle_volume'] != null) {
               String newLcv = data['last_cycle_volume'].toString();
               double nLcv = double.tryParse(newLcv) ?? 0.0;
@@ -529,7 +532,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
         }),
       );
     } catch (e) {
-      if (mounted) {
+      if (mounted && SettingsScreen.pushNotificationsEnabled.value) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text("Failed to communicate with pump controller")),
@@ -541,12 +544,14 @@ class _SensorsScreenState extends State<SensorsScreen> {
   Future<void> _toggleSensorState(String sensorKey, bool turnOn) async {
     if (!turnOn) {
       if (disabledSensors.length >= 2) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Maximum 2 sensors can be disabled at once.".tr),
-            backgroundColor: Colors.redAccent.shade400,
-          ),
-        );
+        if (SettingsScreen.pushNotificationsEnabled.value) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Maximum 2 sensors can be disabled at once.".tr),
+              backgroundColor: Colors.redAccent.shade400,
+            ),
+          );
+        }
         return;
       }
     }
@@ -839,6 +844,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
         setState(() {
           _isSystemOn = !_isSystemOn;
         });
+
+        // Trigger an immediate fetch so the UI is instantly responsive upon turning on
+        if (_isSystemOn) {
+          _fetchSensorData();
+          _fetchLiveFlowData();
+          _fetchFields();
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 400),

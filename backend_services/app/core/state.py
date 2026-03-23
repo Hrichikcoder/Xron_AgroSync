@@ -11,3 +11,17 @@ current_flow_rate = 0.0
 
 target_volume: float = 500.0
 active_field_area_cm2: float = 150.0
+
+# Live Diagnostics State
+live_sensor_data = {
+    "temperature": 0.0,
+    "humidity": 0.0,
+    "ldr": 0,
+    "soil_moisture": 4095,
+    "rain_level": 4095,
+    "depth_level": 0,
+    "water_flow": 0.0,
+    "flow_rate": 0.0
+}
+
+trigger_hw_diag = False

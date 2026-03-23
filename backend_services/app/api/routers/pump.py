@@ -26,11 +26,20 @@ async def control_pump(command: PumpControl):
 
 @router.get("/status")
 async def get_pump_status():
+    should_run_diag = state.trigger_hw_diag
+    if should_run_diag:
+        state.trigger_hw_diag = False
     return {
         "mode": state.pump_mode,
         "pump1": state.pump1_state,
         "pump2": state.pump2_state,
         "shade": state.shade_state,
         "sprinkler": state.sprinkler_state,
-        "target_volume": getattr(state, "target_volume", 500.0) # <--- ADDED HERE FOR THE ESP32
+        "target_volume": getattr(state, "target_volume", 500.0), # <--- ADDED HERE FOR THE ESP32
+        "run_diag": should_run_diag
     }
+
+@router.post("/trigger_diagnostics")
+async def trigger_diagnostics():
+    state.trigger_hw_diag = True
+    return {"message": "Hardware diagnostics triggered"}
