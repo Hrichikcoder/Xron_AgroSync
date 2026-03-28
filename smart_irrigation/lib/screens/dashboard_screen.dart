@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data'; 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:web_socket_channel/web_socket_channel.dart'; // NEW MODIFICATION
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../core/translations.dart';
 import '../core/globals.dart'; 
@@ -12,6 +13,7 @@ import 'crop_doctor_screen.dart';
 import 'market_screen.dart';
 import 'settings_screen.dart';
 import '../core/app_config.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -21,7 +23,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  WebSocketChannel? _channel; // NEW MODIFICATION
+  WebSocketChannel? _channel;
 
   List<Widget> get _screens => [
         const SensorsScreen(),
@@ -38,22 +40,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _connectWebSocket(); // NEW MODIFICATION: Initializes real-time listener
+    _connectWebSocket();
     _fetchInitialProfile();
     _fetchNotificationHistory();
   }
 
   @override
   void dispose() {
-    _channel?.sink.close(); // NEW MODIFICATION: Clean up connection when screen is closed
+    _channel?.sink.close();
     super.dispose();
   }
 
-  // NEW MODIFICATION: WebSocket connection to FastAPI
   void _connectWebSocket() {
     try {
       _channel = WebSocketChannel.connect(
-        Uri.parse('ws://${AppConfig.serverIp}:8000/api/notifications/ws'), // Update IP if running on physical device
+        Uri.parse('ws://${AppConfig.serverIp}:8000/api/notifications/ws'), 
       );
 
       _channel!.stream.listen((message) {
@@ -82,9 +83,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint("WebSocket Connection Error: $e");
     }
   }
+
   Future<void> _fetchNotificationHistory() async {
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/notifications/history'));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/notifications/history'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {
@@ -95,7 +105,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: (n['type'] == 'alert' ? "Critical Alert" : "System Update").tr,
             message: (n['message'] ?? "Event occurred").toString().tr,
             timestamp: n['timestamp'] != null ? DateTime.parse(n['timestamp']) : DateTime.now(),
-            isRead: false, // You can update this based on local storage later
+            isRead: false,
           )).toList();
 
           if (mounted) {
@@ -110,7 +120,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchInitialProfile() async {
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_profile'));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/get_profile'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {
@@ -214,12 +232,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 style: TextStyle(color: Colors.greenAccent.shade700, fontWeight: FontWeight.bold),
                               ),
                             ),
-                            // ---> ADDED: Clear All Notifications Button <---
                             IconButton(
                               icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
                               tooltip: "Clear all notifications",
                               onPressed: () {
-                                // Instantly empties the notification list
                                 SmartIrrigationApp.notificationsNotifier.value = [];
                               },
                             ),
@@ -382,7 +398,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Increased the size of the image from 38 to 48
                 Image.asset(
                   'assets/plant_icon.png', 
                   width: 78, 

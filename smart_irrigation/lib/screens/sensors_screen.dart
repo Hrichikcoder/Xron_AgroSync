@@ -11,6 +11,7 @@ import '../widgets/bouncing_button.dart';
 import '../widgets/fade_in_slide.dart';
 import '../core/app_config.dart';
 import 'settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({super.key});
@@ -143,7 +144,16 @@ class _SensorsScreenState extends State<SensorsScreen> {
     if (!_isSystemOn) return; // Stop fetching fields if system is off
     
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_fields'));
+      // 1. Retrieve the saved JWT token
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      // 2. Attach it to the GET request
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/get_fields'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {

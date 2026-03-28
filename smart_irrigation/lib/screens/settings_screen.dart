@@ -1,9 +1,14 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui';
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:geolocator/geolocator.dart'; 
+import 'package:geocoding/geocoding.dart';   
+
 import '../widgets/bouncing_button.dart';
 import '../widgets/fade_in_slide.dart';
 import '../core/translations.dart';
@@ -40,7 +45,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _userPhone = "Loading...";
   String _userLocation = "Loading...";
 
-  // Dynamic Fields List
   List<Map<String, dynamic>> _fields = [];
 
   final Map<String, List<String>> _languageGroups = {
@@ -55,7 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _fetchProfileFromDatabase(); 
-    _fetchFieldsFromDatabase(); // Fetch fields on load
+    _fetchFieldsFromDatabase(); 
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (openEditProfileNotifier.value) {
@@ -65,10 +69,166 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  // Fetch Fields from Database
+  Future<void> _fetchDeviceLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (kIsWeb) {
+        try {
+          final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.latitude}&lon=${position.longitude}&zoom=10&addressdetails=1');
+          final response = await http.get(url, headers: {'User-Agent': 'AgroPulseApp/1.0'});
+          
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            final address = data['address'] ?? {};
+            String city = address['city'] ?? address['town'] ?? address['state_district'] ?? 'Unknown City';
+            String state = address['state'] ?? '';
+            
+            if (mounted) {
+              setState(() {
+                _userLocation = "$city, $state".replaceAll(RegExp(r',$'), '').trim();
+                currentUserLocation.value = _userLocation;
+              });
+            }
+          }
+        } catch (apiError) {
+          debugPrint("OSM Web Geocoding error: $apiError");
+        }
+      } else {
+        List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks[0];
+
+          List<String> addressParts = [];
+          if (place.subLocality != null && place.subLocality!.isNotEmpty) addressParts.add(place.subLocality!);
+          if (place.locality != null && place.locality!.isNotEmpty) addressParts.add(place.locality!);
+
+          if (addressParts.isEmpty) {
+            if (place.street != null && place.street!.isNotEmpty) {
+              addressParts.add(place.street!);
+            } else if (place.administrativeArea != null) {
+              addressParts.add(place.administrativeArea!);
+            }
+          }
+
+          if (mounted && addressParts.isNotEmpty) {
+            setState(() {
+              _userLocation = addressParts.join(", ");
+              currentUserLocation.value = _userLocation;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Location fetch error: $e");
+    }
+  }
+
+  Future<void> _fetchProfileFromDatabase() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/get_profile'),
+        headers: {'Authorization': 'Bearer $token'}, 
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          final user = data['user'];
+          if (mounted) {
+            setState(() {
+              _userName = user['name'] ?? "Unknown";
+              _userEmail = user['email'] ?? "Unknown";
+              _userPhone = user['phone'] ?? "Unknown";
+              _userLocation = user['location'] ?? "Unknown";
+              _isLoadingProfile = false;
+            });
+
+            if (_userLocation == "Unknown" || _userLocation.isEmpty) {
+              _fetchDeviceLocation();
+            }
+            
+            if (user['profile_pic_base64'] != null) {
+              userProfileImageNotifier.value = base64Decode(user['profile_pic_base64']);
+            }
+          }
+        }
+      } else {
+        debugPrint("Failed to fetch profile: ${response.statusCode}");
+        if (mounted) setState(() => _isLoadingProfile = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+      if (mounted) {
+        setState(() {
+          _userName = "Offline Mode";
+          _userEmail = "No Connection";
+          _isLoadingProfile = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveProfileToDatabase(Uint8List? imageBytes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      var request = http.MultipartRequest(
+        'POST', 
+        Uri.parse('${AppConfig.baseUrl}/update_profile') 
+      );
+
+      request.headers['Authorization'] = 'Bearer $token'; 
+
+      request.fields['name'] = _userName;
+      request.fields['email'] = _userEmail;
+      request.fields['phone'] = _userPhone;
+      request.fields['location'] = _userLocation;
+
+      if (imageBytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes('profile_pic', imageBytes, filename: 'dp.jpg'),
+        );
+      }
+
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        debugPrint("Profile saved to PostgreSQL successfully");
+      } else {
+        debugPrint("Failed to save profile: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("API Connection Error: $e");
+    }
+  }
+
   Future<void> _fetchFieldsFromDatabase() async {
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_fields'));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/get_fields'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['status'] == 'success') {
@@ -82,56 +242,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Widget _buildLogoutButton(bool isDark) {
-    return BouncingButton(
-      onTap: () {
-        // Optional: Add logic here to clear saved tokens/preferences 
-        // e.g., SharedPreferences.getInstance().then((prefs) => prefs.clear());
-
-        // Navigate back to Auth Screen and remove all previous routes
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => AuthScreen()),
-          (Route<dynamic> route) => false,
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(top: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.redAccent.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.logout_rounded, color: Colors.redAccent.shade400, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              "Sign Out".tr,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent.shade400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _updateFieldInBackend(int id, String newName, String newArea) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
       final response = await http.put(
         Uri.parse('${AppConfig.baseUrl}/update_field/$id'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
         body: json.encode({'name': newName, 'area': newArea}),
       );
 
       if (response.statusCode == 200) {
-        // Trigger your existing fetch function to refresh the UI
         _fetchFieldsFromDatabase(); 
       }
     } catch (e) {
@@ -139,12 +264,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // 2. The Edit Dialog
   void _showEditFieldDialog(int id, String currentName, String currentArea) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final nameController = TextEditingController(text: currentName);
-    
-    // Strip " Acres" out of the string so the user just edits the number
     final areaController = TextEditingController(text: currentArea.replaceAll(" Acres", ""));
 
     showDialog(
@@ -193,72 +315,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       },
     );
-  }
-
-  // Dynamic Fetch Profile from PostgreSQL
-  Future<void> _fetchProfileFromDatabase() async {
-    try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/get_profile'));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          final user = data['user'];
-          if (mounted) {
-            setState(() {
-              _userName = user['name'] ?? "Unknown";
-              _userEmail = user['email'] ?? "Unknown";
-              _userPhone = user['phone'] ?? "Unknown";
-              _userLocation = user['location'] ?? "Unknown";
-              _isLoadingProfile = false;
-            });
-            
-            if (user['profile_pic_base64'] != null) {
-              userProfileImageNotifier.value = base64Decode(user['profile_pic_base64']);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint("Error fetching profile: $e");
-      if (mounted) {
-        setState(() {
-          _userName = "Offline Mode";
-          _userEmail = "No Connection";
-          _isLoadingProfile = false;
-        });
-      }
-    }
-  }
-
-  // API Call to PostgreSQL backend for saving
-  Future<void> _saveProfileToDatabase(Uint8List? imageBytes) async {
-    try {
-      var request = http.MultipartRequest(
-        'POST', 
-        Uri.parse('${AppConfig.baseUrl}/update_profile') 
-      );
-
-      request.fields['name'] = _userName;
-      request.fields['email'] = _userEmail;
-      request.fields['phone'] = _userPhone;
-      request.fields['location'] = _userLocation;
-
-      if (imageBytes != null) {
-        request.files.add(
-          http.MultipartFile.fromBytes('profile_pic', imageBytes, filename: 'dp.jpg'),
-        );
-      }
-
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        debugPrint("Profile saved to PostgreSQL successfully");
-      } else {
-        debugPrint("Failed to save profile: ${response.statusCode}");
-      }
-    } catch (e) {
-      debugPrint("API Connection Error: $e");
-    }
   }
 
   BoxDecoration _cardDecoration(bool isDark) {
@@ -583,17 +639,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   _fields[index]["area"].toString(),
                                   style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                 ),
-                                // --- REPLACED: Added Row for Edit & Delete Buttons ---
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    // 1. The Edit Button
                                     IconButton(
                                       icon: Icon(Icons.edit_rounded, color: Colors.blueAccent.shade400),
                                       onPressed: () {
-                                        // Close the management dialog to prevent stacking
                                         Navigator.pop(context); 
-                                        // Open the Edit Dialog you already built
                                         _showEditFieldDialog(
                                           _fields[index]["id"],
                                           _fields[index]["name"].toString(),
@@ -601,24 +653,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         );
                                       },
                                     ),
-                                    // 2. The Existing Delete Button
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
                                       onPressed: () async {
                                         final fieldId = _fields[index]["id"];
                                         
-                                        // Optimistically remove from UI
                                         setStateDialog(() {
                                           _fields.removeAt(index);
                                         });
                                         setState(() {});
 
-                                        // Call API to delete from DB
                                         try {
-                                          await http.delete(Uri.parse('${AppConfig.baseUrl}/delete_field/$fieldId'));
+                                          final prefs = await SharedPreferences.getInstance();
+                                          final token = prefs.getString('jwt_token') ?? '';
+
+                                          await http.delete(
+                                            Uri.parse('${AppConfig.baseUrl}/delete_field/$fieldId'),
+                                            headers: {'Authorization': 'Bearer $token'},
+                                          );
                                         } catch (e) {
                                           debugPrint("Failed to delete field: $e");
-                                          _fetchFieldsFromDatabase(); // Revert on failure
+                                          _fetchFieldsFromDatabase(); 
                                         }
                                       },
                                     ),
@@ -698,12 +753,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (nameController.text.isNotEmpty && areaController.text.isNotEmpty) {
                   final newName = nameController.text;
                   final newArea = areaController.text;
-                  Navigator.pop(context); // Close dialog immediately
+                  Navigator.pop(context); 
 
                   try {
+                    final prefs = await SharedPreferences.getInstance();
+                    final token = prefs.getString('jwt_token') ?? '';
+
                     final response = await http.post(
                       Uri.parse('${AppConfig.baseUrl}/add_field'),
-                      headers: {'Content-Type': 'application/json'},
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer $token'
+                      },
                       body: json.encode({'name': newName, 'area': newArea}),
                     );
 
@@ -808,6 +869,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // --- UPDATED PROFILE CARD (Edit & Sign Out buttons are now safely structured here) ---
   Widget _buildProfileCard(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -837,86 +899,154 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 ),
               ),
-              const SizedBox(width: 20),
+              const SizedBox(width: 40), // Increased gap between photo and details
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _userName,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : Colors.black87,
-                        letterSpacing: -0.5,
-                      ),
+                    // --- NAME & BUTTONS ROW ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _userName,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : Colors.black87,
+                              letterSpacing: -0.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            BouncingButton(
+                              onTap: () => _showEditProfileDialog(isDark),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent.shade400.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.blueAccent.shade400.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_rounded, size: 16, color: Colors.blueAccent.shade400),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "Edit".tr,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.blueAccent.shade100 : Colors.blueAccent.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            BouncingButton(
+                              onTap: () async {
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.remove('jwt_token');
+
+                                currentUserName.value = "Loading...";
+                                currentUserEmail.value = "Loading...";
+                                currentUserPhone.value = "Loading...";
+                                currentUserLocation.value = "Loading...";
+                                userProfileImageNotifier.value = null;
+
+                                if (!mounted) return;
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => AuthScreen()),
+                                  (Route<dynamic> route) => false,
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.logout_rounded, size: 16, color: Colors.redAccent.shade400),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      "Sign Out".tr,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.redAccent.shade400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
+                    // --- CONTACT INFO ---
                     Row(
                       children: [
                         Icon(Icons.email_rounded, size: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600),
                         const SizedBox(width: 6),
-                        Text(
-                          _userEmail,
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                        Expanded(
+                          child: Text(
+                            _userEmail,
+                            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Icon(Icons.phone_rounded, size: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600),
                         const SizedBox(width: 6),
-                        Text(
-                          _userPhone,
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                        Expanded(
+                          child: Text(
+                            _userPhone,
+                            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         Icon(Icons.location_on_rounded, size: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600),
                         const SizedBox(width: 6),
-                        Text(
-                          _userLocation,
-                          style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                        Expanded(
+                          child: Text(
+                            _userLocation,
+                            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              BouncingButton(
-                onTap: () => _showEditProfileDialog(isDark),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.shade400.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blueAccent.shade400.withOpacity(0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_rounded, size: 16, color: Colors.blueAccent.shade400),
-                      const SizedBox(width: 6),
-                      Text(
-                        "Edit".tr,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.blueAccent.shade100 : Colors.blueAccent.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
     );
   }
-
+  
   Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0, top: 8.0, left: 8.0),
@@ -1150,7 +1280,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          // The Segmented Control Pill
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -1262,10 +1391,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "System Diagnostics",
             "Run a full check on all modules",
             Icons.health_and_safety_rounded,
-            
-            // 2. Change the empty () {} to call the imported file
             () => showDiagnosticsDialog(context, isDark), 
-            
             isDark,
           ),
         ],
@@ -1376,7 +1502,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       FadeInSlide(index: 3, child: _buildNotificationsSection(isDark)),
                                       const SizedBox(height: 24),
                                       FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
-                                      FadeInSlide(index: 5, child: _buildLogoutButton(isDark)),
+                                      // Log out button moved to profile card
                                     ],
                                   ),
                                 ),
@@ -1392,7 +1518,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 FadeInSlide(index: 3, child: _buildSystemSection(isDark)),
                                 const SizedBox(height: 24),
                                 FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
-                                FadeInSlide(index: 5, child: _buildLogoutButton(isDark)),
+                                // Log out button moved to profile card
                               ],
                             ),
                           const SizedBox(height: 40),
