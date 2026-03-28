@@ -9,7 +9,6 @@ class UserProfile(Base):
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
     phone = Column(String)
-    location = Column(String)
     profile_pic = Column(LargeBinary, nullable=True) # Stores image byte data
 
 class FarmField(Base):

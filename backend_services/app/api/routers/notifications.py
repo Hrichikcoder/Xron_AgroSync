@@ -2,6 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
+import asyncio
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -27,8 +28,17 @@ class ConnectionManager:
         self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            await connection.send_json(message)
+        async def send_to_one(connection: WebSocket):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                # If a send fails (e.g., mobile app went to background/lost WiFi),
+                # assume the connection is dead and clean it up immediately.
+                self.disconnect(connection)
+
+        # Use asyncio.gather to fire all messages concurrently instead of sequentially
+        if self.active_connections:
+            await asyncio.gather(*(send_to_one(c) for c in self.active_connections))
 
 manager = ConnectionManager()
 

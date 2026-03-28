@@ -38,3 +38,22 @@ class FeedbackPayload(BaseModel):
     market_name: str
     lat: Optional[float] = None
     lon: Optional[float] = None
+
+class SensorToggle(BaseModel):
+    sensor: str
+    state: str
+
+class PhonePayload(BaseModel):
+    phone: str
+    is_register: bool = False
+
+class VerifyPayload(BaseModel):
+    phone: str
+    otp: str
+
+# NEW: Payload for the actual sign-up step
+class RegisterPayload(BaseModel):
+    phone: str
+    name: str
+    email: str
+    otp: str

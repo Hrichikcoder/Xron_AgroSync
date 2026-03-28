@@ -10,6 +10,8 @@ import '../core/translations.dart';
 import '../core/globals.dart';
 import 'system_diagnostics_dialog.dart';
 import '../core/app_config.dart';
+import 'auth_screen.dart'; 
+
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
   final ValueChanged<bool> onThemeChanged;
@@ -78,6 +80,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint("Error fetching fields: $e");
     }
+  }
+
+  Widget _buildLogoutButton(bool isDark) {
+    return BouncingButton(
+      onTap: () {
+        // Optional: Add logic here to clear saved tokens/preferences 
+        // e.g., SharedPreferences.getInstance().then((prefs) => prefs.clear());
+
+        // Navigate back to Auth Screen and remove all previous routes
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => AuthScreen()),
+          (Route<dynamic> route) => false,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded, color: Colors.redAccent.shade400, size: 22),
+            const SizedBox(width: 12),
+            Text(
+              "Sign Out".tr,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.redAccent.shade400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateFieldInBackend(int id, String newName, String newArea) async {
+    try {
+      final response = await http.put(
+        Uri.parse('${AppConfig.baseUrl}/update_field/$id'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'name': newName, 'area': newArea}),
+      );
+
+      if (response.statusCode == 200) {
+        // Trigger your existing fetch function to refresh the UI
+        _fetchFieldsFromDatabase(); 
+      }
+    } catch (e) {
+      debugPrint("Error updating field: $e");
+    }
+  }
+
+  // 2. The Edit Dialog
+  void _showEditFieldDialog(int id, String currentName, String currentArea) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final nameController = TextEditingController(text: currentName);
+    
+    // Strip " Acres" out of the string so the user just edits the number
+    final areaController = TextEditingController(text: currentArea.replaceAll(" Acres", ""));
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+          title: Text("Edit Field", style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: "Field Name",
+                  labelStyle: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: areaController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Area (Acres)",
+                  labelStyle: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent.shade400),
+              onPressed: () {
+                if (nameController.text.isNotEmpty && areaController.text.isNotEmpty) {
+                  _updateFieldInBackend(id, nameController.text, areaController.text);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Save Changes", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // Dynamic Fetch Profile from PostgreSQL
@@ -468,25 +583,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   _fields[index]["area"].toString(),
                                   style: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                 ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                                  onPressed: () async {
-                                    final fieldId = _fields[index]["id"];
-                                    
-                                    // Optimistically remove from UI
-                                    setStateDialog(() {
-                                      _fields.removeAt(index);
-                                    });
-                                    setState(() {});
+                                // --- REPLACED: Added Row for Edit & Delete Buttons ---
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // 1. The Edit Button
+                                    IconButton(
+                                      icon: Icon(Icons.edit_rounded, color: Colors.blueAccent.shade400),
+                                      onPressed: () {
+                                        // Close the management dialog to prevent stacking
+                                        Navigator.pop(context); 
+                                        // Open the Edit Dialog you already built
+                                        _showEditFieldDialog(
+                                          _fields[index]["id"],
+                                          _fields[index]["name"].toString(),
+                                          _fields[index]["area"].toString(),
+                                        );
+                                      },
+                                    ),
+                                    // 2. The Existing Delete Button
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                                      onPressed: () async {
+                                        final fieldId = _fields[index]["id"];
+                                        
+                                        // Optimistically remove from UI
+                                        setStateDialog(() {
+                                          _fields.removeAt(index);
+                                        });
+                                        setState(() {});
 
-                                    // Call API to delete from DB
-                                    try {
-                                      await http.delete(Uri.parse('${AppConfig.baseUrl}/delete_field/$fieldId'));
-                                    } catch (e) {
-                                      debugPrint("Failed to delete field: $e");
-                                      _fetchFieldsFromDatabase(); // Revert on failure
-                                    }
-                                  },
+                                        // Call API to delete from DB
+                                        try {
+                                          await http.delete(Uri.parse('${AppConfig.baseUrl}/delete_field/$fieldId'));
+                                        } catch (e) {
+                                          debugPrint("Failed to delete field: $e");
+                                          _fetchFieldsFromDatabase(); // Revert on failure
+                                        }
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
@@ -974,6 +1110,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+  Widget _buildSystemControlMode(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.psychology_rounded, color: Colors.blueAccent.shade400, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("System Control Mode", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _autoIrrigationEnabled 
+                          ? "AI is actively managing water delivery." 
+                          : "Manual override active. You control the pumps.",
+                      style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // The Segmented Control Pill
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _autoIrrigationEnabled = true),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _autoIrrigationEnabled ? (isDark ? const Color(0xFF10B981) : const Color(0xFF064E3B)) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: _autoIrrigationEnabled 
+                            ? [BoxShadow(color: (isDark ? const Color(0xFF10B981) : const Color(0xFF064E3B)).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.auto_awesome_rounded, size: 18, color: _autoIrrigationEnabled ? Colors.white : Colors.grey.shade500),
+                          const SizedBox(width: 8),
+                          Text("Smart AI", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _autoIrrigationEnabled ? Colors.white : Colors.grey.shade500)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _autoIrrigationEnabled = false),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: !_autoIrrigationEnabled ? Colors.orangeAccent.shade400 : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: !_autoIrrigationEnabled 
+                            ? [BoxShadow(color: Colors.orangeAccent.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                            : [],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.back_hand_rounded, size: 18, color: !_autoIrrigationEnabled ? Colors.white : Colors.grey.shade500),
+                          const SizedBox(width: 8),
+                          Text("Manual", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: !_autoIrrigationEnabled ? Colors.white : Colors.grey.shade500)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSystemSection(bool isDark) {
     return Container(
@@ -1136,6 +1376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       FadeInSlide(index: 3, child: _buildNotificationsSection(isDark)),
                                       const SizedBox(height: 24),
                                       FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
+                                      FadeInSlide(index: 5, child: _buildLogoutButton(isDark)),
                                     ],
                                   ),
                                 ),
@@ -1151,6 +1392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 FadeInSlide(index: 3, child: _buildSystemSection(isDark)),
                                 const SizedBox(height: 24),
                                 FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
+                                FadeInSlide(index: 5, child: _buildLogoutButton(isDark)),
                               ],
                             ),
                           const SizedBox(height: 40),

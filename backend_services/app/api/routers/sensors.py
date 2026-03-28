@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from influxdb_client import Point, WritePrecision
-from app.schemas.payloads import SensorData, FlowData
+from app.schemas.payloads import SensorData, FlowData, SensorToggle
 from app.db.influx import write_api, query_api
 from app.core.config import settings
 import app.core.state as state
@@ -133,3 +133,22 @@ async def get_live_sensor_data():
     Used by the App's Diagnostics screen and Live Dashboards.
     """
     return state.live_sensor_data
+
+@router.post("/toggle")
+async def toggle_sensor(data: SensorToggle):
+    # If state is 'off', is_disabled is True. Otherwise, False.
+    is_disabled = (data.state == 'off')
+    
+    # Map the incoming Flutter sensor name to our state variables
+    if data.sensor == "soil_moisture":
+        state.disable_soil_moisture = is_disabled
+    elif data.sensor == "depth":
+        state.disable_depth = is_disabled
+    elif data.sensor == "temperature":
+        state.disable_temperature = is_disabled
+    elif data.sensor == "ldr":
+        state.disable_ldr = is_disabled
+    elif data.sensor == "rain_level":
+        state.disable_rain_level = is_disabled
+        
+    return {"message": f"Sensor {data.sensor} disabled state set to {is_disabled}"}

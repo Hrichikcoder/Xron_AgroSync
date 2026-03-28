@@ -25,3 +25,11 @@ live_sensor_data = {
 }
 
 trigger_hw_diag = False
+
+
+# --- Added: Sensor Override States ---
+disable_soil_moisture = False
+disable_depth = False
+disable_temperature = False
+disable_ldr = False
+disable_rain_level = False

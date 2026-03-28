@@ -25,6 +25,13 @@ void checkBackendOverride() {
         manualShade = doc["shade"].as<bool>(); 
         manualSprinkler = doc["sprinkler"].as<bool>(); 
         
+
+        disableSoil = doc["disable_soil_moisture"] | false; 
+        disableDepth = doc["disable_depth"] | false;
+        disableTemp = doc["disable_temperature"] | false;
+        disableLdr = doc["disable_ldr"] | false;
+        disableRain = doc["disable_rain_level"] | false;
+        
         if (doc.containsKey("run_diag") && doc["run_diag"].as<bool>() == true) {
             runSelfDiagnostics(); // Execute the Serial print sequence
         }

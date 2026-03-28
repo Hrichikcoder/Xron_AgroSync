@@ -27,7 +27,6 @@ async def get_profile(db: Session = Depends(get_db)):
                 "name": user.name,
                 "email": user.email,
                 "phone": user.phone,
-                "location": user.location,
                 "profile_pic_base64": dp_base64
             }
         }
@@ -42,7 +41,6 @@ async def update_profile(
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
-    location: str = Form(...),
     profile_pic: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
@@ -57,7 +55,6 @@ async def update_profile(
             user.name = name
             user.email = email
             user.phone = phone
-            user.location = location
             if image_bytes:
                 user.profile_pic = image_bytes
             db.commit()
@@ -111,8 +108,7 @@ async def delete_field(field_id: int, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     
-    # Add to routers/profile.py (or a new settings router)
-from pydantic import BaseModel
+# Add to routers/profile.py (or a new settings router)
 import app.core.state as state
 
 class ActiveFieldPayload(BaseModel):
@@ -122,3 +118,26 @@ class ActiveFieldPayload(BaseModel):
 async def set_active_field(payload: ActiveFieldPayload):
     state.active_field_area_cm2 = payload.area_acres
     return {"status": "success", "active_area_cm2": state.active_field_area_cm2}
+
+
+class FieldUpdate(BaseModel):
+    name: str
+    area: str
+
+@router.put("/update_field/{field_id}")
+async def update_field(field_id: int, field: FieldUpdate, db: Session = Depends(get_db)):
+    try:
+        db_field = db.query(FarmField).filter(FarmField.id == field_id).first()
+        if not db_field:
+            raise HTTPException(status_code=404, detail="Field not found")
+        
+        # Update the values
+        db_field.name = field.name
+        db_field.area = field.area
+        db.commit()
+        db.refresh(db_field)
+        
+        return {"status": "success", "field": {"id": db_field.id, "name": db_field.name, "area": db_field.area}}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

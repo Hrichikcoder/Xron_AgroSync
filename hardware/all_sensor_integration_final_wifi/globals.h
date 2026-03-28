@@ -68,4 +68,10 @@ extern const unsigned long pump2RunDuration;
 extern unsigned long volumeReachedTime;
 extern const unsigned long restartDelay;
 
+extern bool disableSoil;
+extern bool disableDepth;
+extern bool disableTemp;
+extern bool disableLdr;
+extern bool disableRain;
+
 #endif

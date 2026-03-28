@@ -72,7 +72,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         currentList.insert(0, newNotification);
         SmartIrrigationApp.notificationsNotifier.value = currentList;
 
-        _showBottomPopupNotification();
+        if (SettingsScreen.pushNotificationsEnabled.value) {
+          _showBottomPopupNotification();
+        }
       }, onError: (error) {
         debugPrint("WebSocket Error: $error");
       });
@@ -197,18 +199,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             color: Theme.of(context).textTheme.bodyLarge!.color,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            final list = List<AppNotification>.from(SmartIrrigationApp.notificationsNotifier.value);
-                            for (var notif in list) {
-                              notif.isRead = true;
-                            }
-                            SmartIrrigationApp.notificationsNotifier.value = list;
-                          },
-                          child: Text(
-                            "Mark all as read",
-                            style: TextStyle(color: Colors.greenAccent.shade700, fontWeight: FontWeight.bold),
-                          ),
+                      Row(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                final list = List<AppNotification>.from(SmartIrrigationApp.notificationsNotifier.value);
+                                for (var notif in list) {
+                                  notif.isRead = true;
+                                }
+                                SmartIrrigationApp.notificationsNotifier.value = list;
+                              },
+                              child: Text(
+                                "Mark all as read",
+                                style: TextStyle(color: Colors.greenAccent.shade700, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            // ---> ADDED: Clear All Notifications Button <---
+                            IconButton(
+                              icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+                              tooltip: "Clear all notifications",
+                              onPressed: () {
+                                // Instantly empties the notification list
+                                SmartIrrigationApp.notificationsNotifier.value = [];
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),

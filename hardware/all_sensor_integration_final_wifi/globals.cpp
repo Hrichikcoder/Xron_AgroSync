@@ -67,5 +67,11 @@ const unsigned long envPrintInterval = 5000;
 unsigned long pump2StartTime = 0;
 const unsigned long pump2RunDuration = 18000;
 
+bool disableSoil = false;
+bool disableDepth = false;
+bool disableTemp = false;
+bool disableLdr = false;
+bool disableRain = false;
+
 unsigned long volumeReachedTime = 0;
 const unsigned long restartDelay = 5000;

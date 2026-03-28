@@ -103,6 +103,14 @@ void loop() {
   int depthValue = analogRead(DEPTH_SENSOR_PIN);
   int capValue = analogRead(CAP_SENSOR_PIN);
   
+  // 1. Soil Moisture: 1500 is "Wet". Auto-pump triggers at > 2000. 
+  // Forcing 1500 ensures the pump stays OFF and ML sees "normal wet soil".
+  if (disableSoil) capValue = 1500; 
+  
+  // 2. Tank Depth: 2000 is "Half Full". Emergency refill triggers at <= 0.
+  // Forcing 2000 ensures Phase 2 (Refill Pump) doesn't accidentally trigger.
+  if (disableDepth) depthValue = 2000; 
+
   // --- Fetch Backend Override Status (Every 3 seconds) ---
   if (currentMillis - lastOverrideCheck >= overrideInterval) {
     checkBackendOverride();
@@ -136,6 +144,14 @@ void loop() {
     int ldrValue = analogRead(LDR_PIN);
     int rainValue = analogRead(RAIN_PIN);
     
+    if (disableTemp) {
+       t = 25.0; // 25 Celsius
+       h = 50.0; // 50% Humidity
+    }
+    if (disableLdr) ldrValue = 1000; // Normal daylight
+    if (disableRain) rainValue = 4095; // 4095 = Dry / No rain
+    
+
     sendSensorDataToBackend(t, h, ldrValue, capValue, rainValue, depthValue, currentVolume, currentFlowRate);
     lastEnvPrintTime = currentMillis;
   }
