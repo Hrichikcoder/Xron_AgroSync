@@ -16,8 +16,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 SECRET_KEY = getattr(settings, 'SECRET_KEY', "your_super_secret_key")
 ALGORITHM = "HS256"
 
-TEXTBEE_API_KEY = "3db60c5c-6d61-4794-927b-f33e62acb2c8"
-TEXTBEE_DEVICE_ID = "69c7bff45763e875d5ef1121"
+TEXTBEE_API_KEY = "d5420e5b-f4d3-469a-9003-d343de65c4a1"
+TEXTBEE_DEVICE_ID = "69c546b6c3538b609d13d100"
 
 class PhonePayload(BaseModel):
     phone: str

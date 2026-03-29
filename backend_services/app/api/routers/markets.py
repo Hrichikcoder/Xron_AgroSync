@@ -3,7 +3,7 @@ from app.schemas.payloads import PredictionRequest, FeedbackPayload
 from app.services.market_service import recommend_real_markets, update_market_summary_cache, get_real_market_features, retrain_model_batch
 from app.db.redis_client import get_cache
 from app.db.postgres import get_db
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 from app.models.user_crop import UserTrackedCrop
 from app.models.market_data import CrowdsourcedPrice
@@ -14,6 +14,9 @@ import statistics
 import xgboost as xgb
 from app.core.config import settings
 from collections import Counter
+import os
+import json
+from google import genai
 
 router = APIRouter(prefix="/api", tags=["Markets"])
 
@@ -28,6 +31,15 @@ class StarCropRequest(BaseModel):
     user_id: str
     crop_name: str
     is_starred: bool
+
+class ParseSpeechRequest(BaseModel):
+    text: str
+    language: str
+
+class ParsedSpeechResponse(BaseModel):
+    crop: str = Field(description="The English translated name of the crop. Empty string if not found.")
+    market: str = Field(description="The English translated name of the market or location. Empty string if not found.")
+    price: str = Field(description="The calculated price strictly for 10kg of the crop as a number string. Empty string if not found.")
 
 
 # ==========================================
@@ -74,6 +86,51 @@ def get_crowdsourced_trend(db: Session, crop_name: str, current_price_10kg: floa
 # ==========================================
 # CORE MARKET ENDPOINTS
 # ==========================================
+@router.post("/markets/parse_speech")
+def parse_speech(request: ParseSpeechRequest):
+    try:
+        # Use settings if available, fallback to os.environ for the API Key
+        api_key = getattr(settings, "GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY"))
+        client = genai.Client(api_key="AIzaSyDF5xVMuFgh3_BK-VVeMqFsKBRsm63A04E") 
+        
+        prompt = f"""
+        You are an agricultural data extractor. Extract the Crop Name, Market Name, and Price from the user's spoken text.
+        Translate the Crop Name and Market Name to English.
+        
+        CRITICAL CALCULATION RULE FOR PRICE: 
+        The target form expects the price strictly per 10kg. 
+        If the user mentions a different quantity, you MUST calculate the proportional price for exactly 10kg.
+        - Example 1: If user says "sold 100kg for 20 rupees", math is 20 / (100/10). Output: "2"
+        - Example 2: If user says "sold 1 quintal (100kg) for 2500", output: "250"
+        - Example 3: If user says "50 rupees per kg", output: "500"
+        - Example 4: If no quantity is mentioned, assume the price given is already for 10kg.
+        
+        If a value is not found, leave it as an empty string.
+
+        Spoken Text: "{request.text}"
+        """
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={
+                'response_mime_type': 'application/json',
+                'response_schema': ParsedSpeechResponse,
+                'temperature': 0.1
+            }
+        )
+
+        # The new SDK parses it into a Pydantic object automatically when a schema is provided
+        if response.parsed:
+            return response.parsed.model_dump()
+        else:
+            return json.loads(response.text)
+    
+    except Exception as e:
+        print(f"NLP Parsing Error: {e}")
+        # Fallback to empty fields so the user can type them manually if it fails
+        return {"crop": "", "market": "", "price": ""}
+
 @router.post("/predict_markets")
 def predict_markets(request: PredictionRequest, db: Session = Depends(get_db)):
     try:

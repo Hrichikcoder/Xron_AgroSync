@@ -1003,38 +1003,6 @@ class _MarketScreenState extends State<MarketScreen> {
     );
   }
 
-  void _processSpokenSentence(String text, TextEditingController cropCtrl, TextEditingController marketCtrl, TextEditingController priceCtrl) {
-    String lower = text.toLowerCase();
-    
-    final priceMatch = RegExp(r'\d+').firstMatch(lower);
-    if (priceMatch != null) {
-      priceCtrl.text = priceMatch.group(0)!;
-    }
-
-    List<String> fillers = [
-      'sold', 'i', 'at', 'for', 'rupees', 'rs', 'per', '10kg', 'kg',
-      'में', 'बेचा', 'को', 'मैयाने', 'मैंने', 'hai', 'diya', 'h',
-      'টাকায়', 'বিক্রি', 'করেছি', 'এ', 'আমি', 'ami', 'tk', 'taka'
-    ];
-    
-    String cleaned = lower;
-    for (var f in fillers) {
-       cleaned = cleaned.replaceAll(RegExp(r'\b' + f + r'\b'), ' ');
-    }
-    
-    cleaned = cleaned.replaceAll(RegExp(r'\d+'), ' ').trim();
-    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
-    
-    List<String> remainingWords = cleaned.split(' ');
-    
-    if (remainingWords.length >= 2) {
-      cropCtrl.text = _capitalize(remainingWords.first);
-      marketCtrl.text = _capitalize(remainingWords.sublist(1).join(' '));
-    } else if (remainingWords.isNotEmpty && remainingWords[0].isNotEmpty) {
-      cropCtrl.text = _capitalize(remainingWords[0]);
-    }
-  }
-
   String _capitalize(String s) => s.isNotEmpty ? '${s[0].toUpperCase()}${s.substring(1)}' : s;
 
   void _showFeedbackUnlockDialog() async {
@@ -1042,7 +1010,7 @@ class _MarketScreenState extends State<MarketScreen> {
     final TextEditingController marketCtrl = TextEditingController();
     final TextEditingController priceCtrl = TextEditingController();
     
-    String selectedLocale = 'en_IN'; 
+    String selectedLocale = 'hi_IN'; 
     final Map<String, String> languages = {
       'en_IN': 'English',
       'hi_IN': 'हिंदी (Hindi)',
@@ -1050,6 +1018,7 @@ class _MarketScreenState extends State<MarketScreen> {
     };
 
     bool available = await _speech.initialize();
+    bool _isParsing = false; // Tracks the API call state
 
     showDialog(
       context: context,
@@ -1108,34 +1077,73 @@ class _MarketScreenState extends State<MarketScreen> {
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                           const SizedBox(height: 16),
+                          
+                          // THE MIC BUTTON LOGIC
                           GestureDetector(
                             onTapDown: (_) async {
                               if (available) {
                                 setDialogState(() {
                                   _isListening = true;
                                   _spokenText = "Listening...";
+                                  cropCtrl.clear();
+                                  marketCtrl.clear();
+                                  priceCtrl.clear();
                                 });
                                 _speech.listen(
                                   localeId: selectedLocale,
                                   onResult: (val) {
                                     setDialogState(() {
                                       _spokenText = val.recognizedWords;
-                                      _processSpokenSentence(_spokenText, cropCtrl, marketCtrl, priceCtrl);
                                     });
                                   },
                                 );
                               }
                             },
-                            onTapUp: (_) {
-                              setDialogState(() => _isListening = false);
+                            onTapUp: (_) async {
+                              // Stop listening and trigger the Backend API
                               _speech.stop();
+                              setDialogState(() {
+                                _isListening = false;
+                                if (_spokenText.isNotEmpty && _spokenText != "Listening...") {
+                                  _isParsing = true; // Show loading indicator
+                                }
+                              });
+
+                              if (_spokenText.isNotEmpty && _spokenText != "Listening...") {
+                                try {
+                                  final response = await http.post(
+                                    Uri.parse('${AppConfig.baseUrl}/markets/parse_speech'),
+                                    headers: {"Content-Type": "application/json"},
+                                    body: json.encode({
+                                      "text": _spokenText,
+                                      "language": selectedLocale
+                                    }),
+                                  );
+
+                                  if (response.statusCode == 200) {
+                                    final data = json.decode(response.body);
+                                    setDialogState(() {
+                                      cropCtrl.text = _capitalize(data['crop'] ?? '');
+                                      marketCtrl.text = _capitalize(data['market'] ?? '');
+                                      priceCtrl.text = data['price']?.toString() ?? '';
+                                    });
+                                  }
+                                } catch (e) {
+                                  debugPrint("Failed to parse speech: $e");
+                                } finally {
+                                  setDialogState(() => _isParsing = false);
+                                }
+                              }
                             },
                             child: CircleAvatar(
                               radius: 35,
                               backgroundColor: _isListening ? Colors.redAccent.shade400 : Colors.blueAccent.shade400,
-                              child: const Icon(Icons.mic, color: Colors.white, size: 36),
+                              child: _isParsing 
+                                ? const CircularProgressIndicator(color: Colors.white) 
+                                : const Icon(Icons.mic, color: Colors.white, size: 36),
                             ),
                           ),
+                          
                           if (_spokenText.isNotEmpty && _spokenText != "Listening...")
                             Padding(
                               padding: const EdgeInsets.only(top: 12.0),
@@ -1839,11 +1847,6 @@ class _MarketScreenState extends State<MarketScreen> {
                                   const SizedBox(height: 6),
                                   Row(
                                     children: [
-                                      Icon(
-                                        Icons.auto_awesome,
-                                        size: 14,
-                                        color: const Color(0xFF064E3B) ,
-                                      ),
                                       const SizedBox(width: 4),
                                       Expanded(
                                         child: Text(

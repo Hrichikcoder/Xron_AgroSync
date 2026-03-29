@@ -7,32 +7,22 @@ from torchvision import transforms
 from PIL import Image
 import io
 import os
-from app.core.config import settings
 from app.data.disease_db import disease_details_db
 
-DISEASE_MODEL_PATH = 'ml_models/plant_disease_model_finetuned.pth'
-LEAF_DETECTOR_PATH = 'ml_models/leaf_detector_binary.pth'
-CLASSES_JSON_PATH = 'ml_models/plantdoc_classes.json'
+DISEASE_MODEL_PATH = 'ml_models/plant_disease_model.pth'
+CLASSES_JSON_PATH = 'ml_models/unified_classes.json'
 
 with open(CLASSES_JSON_PATH, 'r') as f:
     dynamic_class_names = json.load(f)
 
-NUM_DISEASE_CLASSES = len(dynamic_class_names)
+NUM_CLASSES = len(dynamic_class_names)
 
-disease_model = models.resnet34(weights=None)
-disease_model.fc = nn.Linear(disease_model.fc.in_features, NUM_DISEASE_CLASSES)
+disease_model = models.resnet18(weights=None)
+disease_model.fc = nn.Linear(disease_model.fc.in_features, NUM_CLASSES)
 
 state_dict = torch.load(DISEASE_MODEL_PATH, map_location=torch.device('cpu'), weights_only=True)
 disease_model.load_state_dict(state_dict)
 disease_model.eval()
-
-leaf_detector = models.mobilenet_v2()
-leaf_detector.classifier[1] = nn.Linear(leaf_detector.last_channel, 1)
-
-if os.path.exists(LEAF_DETECTOR_PATH):
-    leaf_detector.load_state_dict(torch.load(LEAF_DETECTOR_PATH, map_location=torch.device('cpu'), weights_only=True))
-
-leaf_detector.eval()
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -47,48 +37,54 @@ def predict_disease(image_bytes: bytes):
     except Exception:
         return {"status": "error", "message": "Invalid image format."}
 
-    if os.path.exists(LEAF_DETECTOR_PATH):
-        with torch.no_grad():
-            output = leaf_detector(input_tensor)
-            prob = torch.sigmoid(output).item()
-            
-            if prob > 0.5:
-                return {
-                    "status": "rejected",
-                    "message": "This is not a plant leaf. Please upload a clear leaf photo.",
-                    "confidence": round(prob, 2)
-                }
-
     with torch.no_grad():
         outputs = disease_model(input_tensor)
         probabilities = F.softmax(outputs, dim=1)
         max_prob, predicted = torch.max(probabilities, 1)
         class_idx = predicted.item()
+        confidence = round(max_prob.item(), 2)
 
-    if max_prob.item() > 0.80:
+    # Automatically handle whether the JSON is a List or a Dictionary
+    if isinstance(dynamic_class_names, list):
+        if class_idx < len(dynamic_class_names):
+            raw_diagnosis = dynamic_class_names[class_idx]
+        else:
+            raw_diagnosis = f"Unknown Code {class_idx}"
+    else:
+        str_class_idx = str(class_idx)
+        raw_diagnosis = dynamic_class_names.get(str_class_idx, f"Unknown Code {class_idx}")
+
+    if "non_leaf" in raw_diagnosis.lower() or "not_leaf" in raw_diagnosis.lower():
+        return {
+            "status": "rejected",
+            "message": "This is not a plant leaf. Please upload a clear leaf photo.",
+            "confidence": confidence
+        }
+
+    if confidence < 0.80:
         return {
             "status": "uncertain",
             "message": "The system is unsure. Please try a clearer photo or a different angle.",
-            "confidence": round(max_prob.item(), 2)
+            "confidence": confidence
         }
 
-    if class_idx < len(dynamic_class_names):
-        raw_diagnosis = dynamic_class_names[class_idx]
-        clean_diagnosis = raw_diagnosis.replace("__", " - ").replace("_", " ")
-        details = disease_details_db.get(raw_diagnosis, {
-            "type": "Data Unavailable",
-            "remedy": {
-                "notes": "Consult local agricultural extension for this specific disease."
-            }
-        })
-    else:
-        clean_diagnosis = f"Unknown Disease Code {class_idx}"
-        details = {}
+    clean_diagnosis = raw_diagnosis.replace("__", " - ").replace("_", " ").title()
+    
+    details = disease_details_db.get(raw_diagnosis, {
+        "type": "Information Pending",
+        "remedy": {
+            "chemical": "Consult local agricultural extension.",
+            "maintenance": "Ensure proper spacing and airflow.",
+            "cultural": "Rotate crops seasonally.",
+            "biological": "Introduce natural predators if applicable.",
+            "notes": "Data for this specific disease is being updated."
+        }
+    })
 
     return {
         "status": "success",
         "diagnosis": clean_diagnosis,
         "details": details,
-        "confidence": round(max_prob.item(), 2),
+        "confidence": confidence,
         "prediction": class_idx
     }
