@@ -4,6 +4,7 @@ import httpx
 import jwt 
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from app.db.redis_client import redis_client
 from app.core.config import settings 
@@ -19,6 +20,9 @@ ALGORITHM = "HS256"
 TEXTBEE_API_KEY = "d5420e5b-f4d3-469a-9003-d343de65c4a1"
 TEXTBEE_DEVICE_ID = "69c546b6c3538b609d13d100"
 
+# --- NEW: OAuth2 scheme to extract the token from the Authorization header ---
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/verify-otp")
+
 class PhonePayload(BaseModel):
     phone: str
     is_register: bool = False
@@ -27,7 +31,6 @@ class VerifyPayload(BaseModel):
     phone: str
     otp: str
 
-# NEW: Payload for direct registration without OTP
 class DirectRegisterPayload(BaseModel):
     phone: str
     name: str
@@ -38,6 +41,32 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# --- NEW: Dependency to get the current user from the JWT token ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Decode the JWT token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    
+    # Fetch the user from the database
+    user = db.query(UserProfile).filter(UserProfile.id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+        
+    return user
+# -------------------------------------------------------------------
 
 async def send_textbee_sms(phone: str, message: str):
     url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
@@ -59,7 +88,6 @@ async def send_textbee_sms(phone: str, message: str):
 async def send_otp(payload: PhonePayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     user = db.query(UserProfile).filter(UserProfile.phone == payload.phone).first()
     
-    # Send OTP is now strictly for Sign In. User must exist.
     if not user:
         raise HTTPException(status_code=404, detail="User not found. Please sign up first.")
 
@@ -117,7 +145,6 @@ async def verify_otp(payload: VerifyPayload, db: Session = Depends(get_db)):
         "token": access_token
     }
 
-# UPDATED: Direct Registration Endpoint
 @router.post("/register")
 async def register_user(payload: DirectRegisterPayload, db: Session = Depends(get_db)):
     existing_user = db.query(UserProfile).filter(UserProfile.phone == payload.phone).first()
