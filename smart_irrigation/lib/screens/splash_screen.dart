@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Add this import
 import '../core/translations.dart';
 import '../widgets/agro_pulse_loader.dart';
 import 'dashboard_screen.dart';
+import 'landing_screen.dart'; // Import the new Landing Screen
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -28,13 +30,29 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
     _controller.forward();
 
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        );
-      }
-    });
+    _navigateNext();
+  }
+
+  // Check auth state to determine next screen
+  Future<void> _navigateNext() async {
+    await Future.delayed(const Duration(seconds: 3));
+    
+    if (!mounted) return;
+    
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+
+    if (token != null && token.isNotEmpty) {
+      // User is already logged in
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      );
+    } else {
+      // User needs to see the landing page
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LandingScreen()),
+      );
+    }
   }
 
   @override
@@ -50,7 +68,6 @@ class _SplashScreenState extends State<SplashScreen>
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
-          // 1. We wrap the Column in a SingleChildScrollView
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(), 
             child: Column(
@@ -64,8 +81,6 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 250,
                   fit: BoxFit.contain,
                 ),
-                                
-                // Name "AgroSync" below the image
                 RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
@@ -93,11 +108,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ],
                   ),
                 ),
-                
-                // Reduced from 48 down to 4
                 const SizedBox(height: 4),
-                
-                // The subtitle under the name
                 Text(
                   "SMART FARM INTELLIGENCE".tr,
                   textAlign: TextAlign.center,
@@ -108,11 +119,7 @@ class _SplashScreenState extends State<SplashScreen>
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                
-                // Reduced from 60 down to 16
                 const SizedBox(height: 16),
-                
-                // Loading icon
                 const AgroPulseLoader(),
               ],
             ),

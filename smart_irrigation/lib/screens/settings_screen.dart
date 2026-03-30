@@ -158,6 +158,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _userEmail = user['email'] ?? "Unknown";
               _userPhone = user['phone'] ?? "Unknown";
               _userLocation = user['location'] ?? "Unknown";
+              
+              // NEW: Load SMS preference
+              _smsAlertsEnabled = user['sms_alerts'] == true || user['sms_alerts'] == 'true'; 
+
               _isLoadingProfile = false;
             });
 
@@ -202,6 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       request.fields['email'] = _userEmail;
       request.fields['phone'] = _userPhone;
       request.fields['location'] = _userLocation;
+      request.fields['sms_alerts'] = _smsAlertsEnabled.toString(); // Keep current SMS state
 
       if (imageBytes != null) {
         request.files.add(
@@ -217,6 +222,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       debugPrint("API Connection Error: $e");
+    }
+  }
+
+  // --- NEW: Optimistic UI update and backend sync for SMS toggling ---
+  Future<void> _toggleSMSAlerts(bool newValue) async {
+    setState(() {
+      _smsAlertsEnabled = newValue;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token') ?? '';
+
+      var request = http.MultipartRequest(
+        'POST', 
+        Uri.parse('${AppConfig.baseUrl}/update_profile') 
+      );
+      request.headers['Authorization'] = 'Bearer $token'; 
+
+      request.fields['name'] = _userName;
+      request.fields['email'] = _userEmail;
+      request.fields['phone'] = _userPhone;
+      request.fields['location'] = _userLocation;
+      request.fields['sms_alerts'] = newValue.toString();
+
+      // Only add image if exists
+      if (userProfileImageNotifier.value != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes('profile_pic', userProfileImageNotifier.value!, filename: 'dp.jpg'),
+        );
+      }
+
+      var response = await request.send();
+      
+      if (response.statusCode != 200) {
+        // Revert UI if update fails
+        setState(() => _smsAlertsEnabled = !newValue);
+        debugPrint("Failed to update SMS preference: ${response.statusCode}");
+      }
+    } catch (e) {
+      setState(() => _smsAlertsEnabled = !newValue);
+      debugPrint("API Error updating SMS preference: $e");
     }
   }
 
@@ -1233,7 +1280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "Send text messages for hardware failures",
             Icons.sms_rounded,
             _smsAlertsEnabled,
-            (val) => setState(() => _smsAlertsEnabled = val),
+            (val) => _toggleSMSAlerts(val), // NEW: Bound to the async backend call
             isDark,
           ),
         ],

@@ -64,9 +64,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         
         if (!mounted) return;
 
+        // --- NEW: Filter Targeted Notifications ---
+        if (decodedMessage.containsKey('target_author_name')) {
+          if (decodedMessage['target_author_name'] != currentUserName.value) {
+            return; // Ignore notifications meant for someone else
+          }
+        }
+
         final newNotification = AppNotification(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          title: (decodedMessage['type'] == 'alert' ? "Critical Alert" : "System Update").tr,
+          title: (decodedMessage['type'] == 'alert' 
+              ? "Critical Alert" 
+              : (decodedMessage['node_id'] == 'community' ? "Community Update" : "System Update")).tr,
           message: (decodedMessage['message'] ?? "New event occurred").toString().tr,
           timestamp: DateTime.now(),
         );
@@ -102,13 +111,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (data['status'] == 'success') {
           final List notifications = data['notifications'];
           
-          final List<AppNotification> historyList = notifications.map((n) => AppNotification(
-            id: n['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-            title: (n['type'] == 'alert' ? "Critical Alert" : "System Update").tr,
-            message: (n['message'] ?? "Event occurred").toString().tr,
-            timestamp: n['timestamp'] != null ? DateTime.parse(n['timestamp']) : DateTime.now(),
-            isRead: false,
-          )).toList();
+          final List<AppNotification> historyList = [];
+          
+          for (var n in notifications) {
+            // --- NEW: Filter Targeted History Data ---
+            if (n.containsKey('target_author_name') && n['target_author_name'] != null) {
+              if (n['target_author_name'] != currentUserName.value) {
+                continue; // Skip notifications meant for someone else
+              }
+            }
+
+            historyList.add(AppNotification(
+              id: n['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              title: (n['type'] == 'alert' 
+                  ? "Critical Alert" 
+                  : (n['node_id'] == 'community' ? "Community Update" : "System Update")).tr,
+              message: (n['message'] ?? "Event occurred").toString().tr,
+              timestamp: n['timestamp'] != null ? DateTime.parse(n['timestamp']) : DateTime.now(),
+              isRead: false,
+            ));
+          }
 
           if (mounted) {
             SmartIrrigationApp.notificationsNotifier.value = historyList;
@@ -119,6 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint("Error fetching notification history: $e");
     }
   }
+  
 
   Future<void> _fetchInitialProfile() async {
     try {

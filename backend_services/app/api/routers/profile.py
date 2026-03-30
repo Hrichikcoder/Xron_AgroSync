@@ -64,7 +64,8 @@ async def get_profile(
                 "email": user.email,
                 "phone": user.phone,
                 "location": getattr(user, 'location', 'Unknown'), # Failsafe if location isn't in DB yet
-                "profile_pic_base64": dp_base64
+                "profile_pic_base64": dp_base64,
+                "sms_alerts": getattr(user, 'sms_alerts', False) # NEW: Include SMS alerts preference
             }
         }
     except HTTPException:
@@ -79,6 +80,7 @@ async def update_profile(
     email: str = Form(...),
     phone: str = Form(...),
     location: str = Form("Unknown"),
+    sms_alerts: str = Form(None), # NEW: Added sms_alerts parameter
     profile_pic: UploadFile = File(None),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db)
@@ -98,6 +100,10 @@ async def update_profile(
             # Update location if the column exists in your DB model
             if hasattr(user, 'location'):
                 user.location = location
+                
+            # NEW: Update SMS alerts if provided and column exists
+            if sms_alerts is not None and hasattr(user, 'sms_alerts'):
+                user.sms_alerts = (sms_alerts.lower() == 'true')
                 
             if image_bytes:
                 user.profile_pic = image_bytes

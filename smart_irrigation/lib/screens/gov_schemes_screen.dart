@@ -117,12 +117,13 @@ class _GovSchemesScreenState extends State<GovSchemesScreen> {
                                 width: double.infinity,
                                 child: OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16.0),
                                     foregroundColor: const Color(0xFF064E3B),
                                     side: const BorderSide(color: Color(0xFF064E3B)),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
-                                  icon: const Icon(Icons.open_in_browser),
-                                  label: const Text("Apply / Learn More", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  icon: const Icon(Icons.open_in_browser, size: 24),
+                                  label: const Text("Apply / Learn More", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                                   onPressed: () => _launchURL(scheme['link']),
                                 ),
                               )

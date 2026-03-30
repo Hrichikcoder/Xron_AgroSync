@@ -1,8 +1,12 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
 import asyncio
+from sqlalchemy.orm import Session
+from app.db.postgres import get_db
+from app.models.user import UserProfile
+from app.api.routers.auth import send_textbee_sms # Importing the SMS function from auth.py
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -52,7 +56,11 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @router.post("/send")
-async def receive_notification_from_esp32(notification: NotificationPayload):
+async def receive_notification_from_esp32(
+    notification: NotificationPayload,
+    background_tasks: BackgroundTasks, # Added for async SMS sending
+    db: Session = Depends(get_db)      # Added to fetch user preferences
+):
     # 1. Create the notification object with a timestamp
     notif_data = notification.dict()
     notif_data["timestamp"] = datetime.now().isoformat()
@@ -65,6 +73,27 @@ async def receive_notification_from_esp32(notification: NotificationPayload):
 
     # 3. Broadcast to currently connected apps
     await manager.broadcast(notif_data)
+
+    # --- NEW: Check if notification is critical and send SMS ---
+    is_critical = False
+    lower_message = notification.message.lower()
+    
+    if notification.type == "critical":
+        is_critical = True
+    elif "water depth less than 0" in lower_message or "empty tank" in lower_message:
+        is_critical = True
+    elif "irrigation cycle completion" in lower_message or "completed watering" in lower_message:
+        is_critical = True
+
+    if is_critical:
+        # Fetch all users who have opted in for SMS alerts
+        users = db.query(UserProfile).all()
+        for user in users:
+            # Check if user has sms_alerts column enabled and a phone number
+            if getattr(user, 'sms_alerts', False) and user.phone:
+                sms_message = f"AgroSync Alert: {notification.message}"
+                background_tasks.add_task(send_textbee_sms, user.phone, sms_message)
+
     return {"status": "Notification broadcasted successfully"}
 
 # --- NEW ENDPOINT: Fetch history on App Load ---

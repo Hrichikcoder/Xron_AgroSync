@@ -291,61 +291,74 @@ def trigger_batch_retrain(db: Session = Depends(get_db)):
 def get_community_markets(db: Session = Depends(get_db)):
     try:
         today_date = datetime.utcnow().date()
-        reports = db.query(CrowdsourcedPrice).all()
+        # Fetch up to 2 years of data to support "Previous Year" comparisons
+        two_years_ago = today_date - timedelta(days=730)
+        
+        reports = db.query(CrowdsourcedPrice).filter(
+            func.date(CrowdsourcedPrice.reported_at) >= two_years_ago
+        ).order_by(CrowdsourcedPrice.reported_at.desc()).all()
         
         grouped = {}
         for r in reports:
-            key = (r.crop_name, r.market_name)
-            if key not in grouped:
-                grouped[key] = {'today': [], 'history': []}
+            crop = r.crop_name
+            if crop not in grouped:
+                grouped[crop] = []
+            grouped[crop].append(r)
             
-            r_date = r.reported_at.date() if r.reported_at else today_date
-            if r_date == today_date:
-                grouped[key]['today'].append(float(r.selling_price))
-            else:
-                grouped[key]['history'].append((r_date, float(r.selling_price)))
-        
         community_data = []
-        for (crop, market), data in grouped.items():
-            today_prices = data['today']
-            if not today_prices:
-                continue 
+        
+        for crop, crop_reports in grouped.items():
+            market_groups = {}
+            for r in crop_reports:
+                mkt = r.market_name
+                if mkt not in market_groups:
+                    market_groups[mkt] = []
+                market_groups[mkt].append(r)
                 
-            if len(today_prices) >= 3:
-                med = statistics.median(today_prices)
-                verified = [p for p in today_prices if abs(p - med) / med <= 0.3]
-            else:
-                verified = today_prices
+            markets_breakdown = []
+            for mkt, mkt_reports in market_groups.items():
+                history_dict = {}
+                today_prices = []
+                for r in mkt_reports:
+                    if r.reported_at:
+                        d_str = r.reported_at.strftime("%Y-%m-%d")
+                        val = float(r.selling_price)
+                        if d_str not in history_dict:
+                            history_dict[d_str] = []
+                        history_dict[d_str].append(val)
+                        if r.reported_at.date() == today_date:
+                            today_prices.append(val)
+                            
+                history = []
+                for d_str, prices in sorted(history_dict.items()):
+                    history.append({
+                        "date": d_str,
+                        "price": round(sum(prices)/len(prices), 2),
+                        "min": round(min(prices), 2),
+                        "max": round(max(prices), 2)
+                    })
+                    
+                if not history:
+                    continue
                 
-            if not verified: continue
-            
-            avg_today = sum(verified) / len(verified)
-            max_today = max(verified)
-            min_today = min(verified)
-            
-            trend_str = "0.0%"
-            history = data['history']
-            if history:
-                history.sort(key=lambda x: x[0], reverse=True)
-                last_date = history[0][0]
-                last_prices = [p for d, p in history if d == last_date]
-                if last_prices:
-                    avg_past = sum(last_prices) / len(last_prices)
-                    pct_change = ((avg_today - avg_past) / avg_past) * 100
-                    trend_str = f"{'+' if pct_change > 0 else ''}{pct_change:.1f}%"
+                avg_today = sum(today_prices)/len(today_prices) if today_prices else history[-1]['price']
                 
-            community_data.append({
-                "crop": crop,
-                "market": market,
-                "price": round(avg_today, 2),
-                "max_price": round(max_today, 2),
-                "min_price": round(min_today, 2),
-                "reports": len(verified),
-                "trend": trend_str
-            })
+                markets_breakdown.append({
+                    "market": mkt,
+                    "state": "West Bengal",
+                    "price": round(avg_today, 2),
+                    "reports": len(today_prices),
+                    "history": history
+                })
+                    
+            if markets_breakdown:
+                community_data.append({
+                    "crop": crop,
+                    "markets": sorted(markets_breakdown, key=lambda x: x['reports'], reverse=True)
+                })
             
-        community_data.sort(key=lambda x: x["reports"], reverse=True)
         return {"community_markets": community_data}
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

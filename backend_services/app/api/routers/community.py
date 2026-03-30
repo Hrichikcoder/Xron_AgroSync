@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.db.postgres import get_db
 from app.models.community import Post, Reply, GovScheme
@@ -68,7 +68,13 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user = Depe
     return {"message": "Post deleted successfully"}
 
 @router.post("/posts/{post_id}/replies", response_model=ReplyResponse)
-def add_reply(post_id: int, reply: ReplyCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def add_reply(
+    post_id: int, 
+    reply: ReplyCreate, 
+    background_tasks: BackgroundTasks, # <-- ADDED
+    db: Session = Depends(get_db), 
+    current_user = Depends(get_current_user)
+):
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -85,6 +91,31 @@ def add_reply(post_id: int, reply: ReplyCreate, db: Session = Depends(get_db), c
     db.add(new_reply)
     db.commit()
     db.refresh(new_reply)
+
+    # --- NEW: Trigger Background Targeted Notification ---
+    def send_notification_sync():
+        import asyncio
+        from datetime import datetime
+        from app.api.routers.notifications import manager, notification_history
+        
+        notif_data = {
+            "message": f"{current_user.name} replied to your post: '{post.title}'",
+            "type": "info",
+            "node_id": "community",
+            "target_author_name": post.author_name, # The target user filter
+            "timestamp": datetime.now().isoformat(),
+            "id": str(int(datetime.now().timestamp() * 1000))
+        }
+        
+        notification_history.insert(0, notif_data)
+        if len(notification_history) > 50:
+            notification_history.pop()
+            
+        asyncio.run(manager.broadcast(notif_data))
+
+    background_tasks.add_task(send_notification_sync)
+    # -----------------------------------------------------
+
     return new_reply
 
 @router.get("/schemes", response_model=List[GovSchemeResponse])
