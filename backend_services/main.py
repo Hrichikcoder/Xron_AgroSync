@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.market_service import update_market_summary_cache
 from app.api.routers import sensors, disease, markets, pump, profile, notifications, auth
-from app.api.routers import community
+
 # 1. Import your database engine and Base
 from app.db.postgres import engine, Base
 # 2. Import your models so SQLAlchemy knows they exist
@@ -30,7 +30,6 @@ app.include_router(pump.router)
 app.include_router(profile.router)
 app.include_router(notifications.router)
 app.include_router(auth.router)
-app.include_router(community.router)
 
 @app.on_event("startup")
 async def startup_event():

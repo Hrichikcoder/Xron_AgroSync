@@ -70,29 +70,16 @@ def predict_disease(image_bytes: bytes):
 
     clean_diagnosis = raw_diagnosis.replace("__", " - ").replace("_", " ").title()
     
-    # 1. Strip everything down to pure lowercase letters (e.g., "potatoearlyblight")
-    normalized_target = raw_diagnosis.lower().replace("_", "").replace(" ", "").replace("-", "")
-    
-    # 2. Search the database ignoring all special characters and cases
-    details = None
-    for db_key, db_value in disease_details_db.items():
-        normalized_db_key = db_key.lower().replace("_", "").replace(" ", "").replace("-", "")
-        if normalized_db_key == normalized_target:
-            details = db_value
-            break
-            
-    # 3. Apply fallback ONLY if it truly doesn't exist anywhere in the DB
-    if details is None:
-        details = {
-            "type": "Information Pending",
-            "remedy": {
-                "chemical": ["Consult local agricultural extension."],
-                "maintenance": ["Ensure proper spacing and airflow."],
-                "cultural": ["Rotate crops seasonally."],
-                "biological": ["Introduce natural predators if applicable."],
-                "notes": "Data for this specific disease is being updated."
-            }
+    details = disease_details_db.get(raw_diagnosis, {
+        "type": "Information Pending",
+        "remedy": {
+            "chemical": "Consult local agricultural extension.",
+            "maintenance": "Ensure proper spacing and airflow.",
+            "cultural": "Rotate crops seasonally.",
+            "biological": "Introduce natural predators if applicable.",
+            "notes": "Data for this specific disease is being updated."
         }
+    })
 
     return {
         "status": "success",

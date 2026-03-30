@@ -13,7 +13,6 @@ import 'crop_doctor_screen.dart';
 import 'market_screen.dart';
 import 'settings_screen.dart';
 import '../core/app_config.dart';
-import 'community_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,7 +29,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SensorsScreen(),
         const CropDoctorScreen(),
         const MarketScreen(),
-        const CommunityScreen(),
         SettingsScreen(
           isDarkMode: SmartIrrigationApp.themeNotifier.value == ThemeMode.dark,
           onThemeChanged: (bool isDark) {
@@ -522,52 +520,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: _screens[_selectedIndex],
         ),
       ),
-      // Replace the existing bottomNavigationBar block in dashboard_screen.dart
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black.withOpacity(0.5) : Colors.black.withOpacity(0.08),
-              blurRadius: 20,
+              color: isDark ? Colors.black : Colors.black.withOpacity(0.05),
+              blurRadius: 15,
               offset: const Offset(0, -5),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: BottomNavigationBar(
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
             selectedItemColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0D5C2E),
-            unselectedItemColor: isDark ? Colors.grey.shade500 : Colors.grey.shade400,
-            showUnselectedLabels: true, // Forces labels to always show
-            type: BottomNavigationBarType.fixed, // Prevents the shifting animation
+            unselectedItemColor: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+            showUnselectedLabels: true,
+            type: BottomNavigationBarType.fixed,
             backgroundColor: Theme.of(context).colorScheme.surface,
             elevation: 0,
             selectedIconTheme: const IconThemeData(size: 28),
             unselectedIconTheme: const IconThemeData(size: 24),
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
             items: [
               BottomNavigationBarItem(
-                icon: const Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.dashboard_rounded)),
+                icon: const Icon(Icons.dashboard_rounded),
                 label: 'Overview'.tr,
               ),
               BottomNavigationBarItem(
-                icon: const Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.medical_services_rounded)),
+                icon: const Icon(Icons.medical_services_rounded),
                 label: 'Crop Doctor'.tr,
               ),
               BottomNavigationBarItem(
-                icon: const Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.storefront_rounded)),
+                icon: const Icon(Icons.storefront_rounded),
                 label: 'Market'.tr,
               ),
               BottomNavigationBarItem(
-                icon: const Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.forum_rounded)),
-                label: 'Community'.tr,
-              ),
-              BottomNavigationBarItem(
-                icon: const Padding(padding: EdgeInsets.only(bottom: 4), child: Icon(Icons.settings_rounded)),
+                icon: const Icon(Icons.settings_rounded),
                 label: 'Settings'.tr,
               ),
             ],
