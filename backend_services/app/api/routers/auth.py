@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.user import UserProfile
 from app.db.postgres import get_db
 from sqlalchemy.orm import Session
-
+from fastapi.security import OAuth2PasswordBearer
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 SECRET_KEY = getattr(settings, 'SECRET_KEY', "your_super_secret_key")
@@ -19,7 +19,7 @@ ALGORITHM = "HS256"
 TEXTBEE_API_KEY = "d5420e5b-f4d3-469a-9003-d343de65c4a1"
 TEXTBEE_DEVICE_ID = "69c546b6c3538b609d13d100"
 
-
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/verify-otp")
 class PhonePayload(BaseModel):
     phone: str
     is_register: bool = False
@@ -39,6 +39,33 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=7)
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# --- NEW: Dependency to get the current user from the JWT token ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Decode the JWT token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    
+    # Fetch the user from the database
+    user = db.query(UserProfile).filter(UserProfile.id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+        
+    return user
+# -------------------------------------------------------------------
+
 
 async def send_textbee_sms(phone: str, message: str):
     url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"

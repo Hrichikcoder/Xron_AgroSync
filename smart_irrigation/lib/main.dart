@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/globals.dart';
 import 'screens/splash_screen.dart';
+import 'screens/market_model_screen.dart';
 
 class AppNotification {
   final String id;
@@ -65,6 +66,9 @@ class SmartIrrigationApp extends StatelessWidget {
                     fontFamily: 'Roboto',
                   ),
                   home: const SplashScreen(),
+                  routes: {
+                    '/market-model': (context) => const MarketModelScreen(),
+                  },
                 );
               },
             );

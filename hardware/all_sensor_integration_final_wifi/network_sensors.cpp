@@ -43,16 +43,21 @@ void sendSensorDataToBackend(float temp, float hum, int ldr, int cap, int rain, 
     http.begin(backendUrl);
     http.addHeader("Content-Type", "application/json");
 
-    StaticJsonDocument<512> doc;
+    // 1. MUST DECLARE 'doc' FIRST
+    StaticJsonDocument<512> doc; 
+    
+    // 2. NOW WE CAN ADD DATA TO IT
+    doc["node_id"] = "esp32_zone_1"; 
     doc["temperature"] = temp;
     doc["humidity"] = hum;
-    doc["ldr_value"] = ldr;
+    doc["ldr"] = ldr; 
     doc["soil_moisture"] = cap; 
     doc["rain_level"] = rain;
     doc["depth_level"] = depth;
     doc["water_flow"] = flow;
     doc["last_cycle_volume"] = lastCycleVolume;
     doc["flow_rate"] = flow_rate;
+    
     String requestBody;
     serializeJson(doc, requestBody);
 

@@ -1285,6 +1285,7 @@ class _MarketScreenState extends State<MarketScreen> with AutomaticKeepAliveClie
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: "market_fab_tag",
         onPressed: _showFeedbackUnlockDialog,
         backgroundColor: Colors.amber.shade500,
         foregroundColor: Colors.black87,

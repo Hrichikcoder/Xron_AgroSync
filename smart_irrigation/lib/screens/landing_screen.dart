@@ -26,6 +26,8 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
     {'icon': '🌡️', 'label': 'Temperature', 'value': 28, 'unit': '°C', 'trend': '↑ +2° today', 'up': true},
     {'icon': '🌫️', 'label': 'Humidity', 'value': 74, 'unit': '%', 'trend': '↓ Dropping', 'up': false},
     {'icon': '🌧️', 'label': 'Rainfall', 'value': 12, 'unit': 'mm', 'trend': '↑ Above avg', 'up': true},
+    {'icon': '☀️', 'label': 'Light (LDR)', 'value': 85, 'unit': '%', 'trend': '↑ Optimal', 'up': true},
+    {'icon': '📏', 'label': 'Water Depth', 'value': 45, 'unit': 'cm', 'trend': '↓ Stable', 'up': true},
   ];
 
   final List<double> _barHeights = [0.55, 0.62, 0.48, 0.70, 0.65, 0.80, 0.72];
@@ -52,6 +54,8 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
         _sensorData[1]['value'] = 27 + rng.nextInt(3);
         _sensorData[2]['value'] = 72 + rng.nextInt(4);
         _sensorData[3]['value'] = 11 + rng.nextInt(3);
+        _sensorData[4]['value'] = 80 + rng.nextInt(8); // LDR simulation
+        _sensorData[5]['value'] = 44 + rng.nextInt(3); // Depth simulation
       });
     });
   }
@@ -143,7 +147,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
         ),
         const SizedBox(height: 24),
         Text(
-          'AgroSync combines real-time sensor data with AI-driven insights to help you automate irrigation, monitor crop health, choose better crops, and sell at the right time—all from one simple platform.',
+          'AgroSync makes farming simpler and smarter. It uses real-time sensor data to handle irrigation and shade automatically, while still letting you take control anytime. It helps you keep your crops healthy, guides you on what to grow, shows the best places to sell, and connects you with other farmers to share and learn together.',
           style: TextStyle(
             fontSize: 18,
             height: 1.6,
@@ -206,12 +210,12 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           ),
           const SizedBox(height: 20),
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: 3, // Changed to 3 columns
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12, 
-            mainAxisSpacing: 12, 
-            childAspectRatio: 2.2, 
+            crossAxisSpacing: 10, // Slightly reduced spacing
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.4, // Adjusted ratio to fit 3 neatly
             children: _sensorData.map((s) => _sensorTile(s, isDark)).toList(),
           ),
           const SizedBox(height: 16),
@@ -245,12 +249,13 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
     );
   }
 
+  // Adjusted tile to fit 3 in a row
   Widget _sensorTile(Map<String, dynamic> s, bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(12), 
+      padding: const EdgeInsets.all(10), // Reduced padding
       decoration: BoxDecoration(
         color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12), // Slightly sharper corners
         border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100),
       ),
       child: Column(
@@ -259,23 +264,26 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(s['icon'], style: const TextStyle(fontSize: 18)), 
-              Text(
-                s['trend'],
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: s['up'] ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+              Text(s['icon'], style: const TextStyle(fontSize: 16)), // Smaller icon
+              Flexible(
+                child: Text(
+                  s['trend'],
+                  overflow: TextOverflow.ellipsis, // Prevents text overflow if trend is long
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: s['up'] ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                ),
               ),
             ],
           ),
           const Spacer(),
-          Text(s['label'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          Text(s['label'], overflow: TextOverflow.ellipsis, maxLines: 1, style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600)), // Smaller label
           const SizedBox(height: 2),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('${s['value']}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
-              const SizedBox(width: 4),
-              Text(s['unit'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              Text('${s['value']}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)), // Smaller value
+              const SizedBox(width: 2),
+              Text(s['unit'], style: TextStyle(fontSize: 10, color: Colors.grey.shade500)), // Smaller unit
             ],
           ),
         ],
@@ -299,7 +307,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
         Text('Everything You Need, From Soil to Sale', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, letterSpacing: -0.5)),
         const SizedBox(height: 16),
         Text(
-          'AgroSync brings together automation, intelligence, and market insights to support every stage of your farming journey.',
+          'AgroSync brings together automation, guidance, and market insights to support every stage of your farming journey.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
@@ -364,9 +372,9 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
 
   Widget _buildHowItWorks(bool isDark) {
     final steps = [
-      {'num': '1', 'title': 'Set Up Sensors', 'desc': 'Install sensors on your farm to start collecting real-time environmental data instantly.'},
+      {'num': '1', 'title': 'Set Up Sensors', 'desc': 'Install sensors across your farm to easily track real-time conditions and understand your field better.'},
       {'num': '2', 'title': 'AI Analyzes Data', 'desc': 'The system processes sensor data along with weather and trends to understand your farm’s condition.'},
-      {'num': '3', 'title': 'Get Smart Alerts', 'desc': 'Receive timely notifications for irrigation, crop health issues, and market opportunities.'},
+      {'num': '3', 'title': 'Get Smart Alerts', 'desc': 'Receive timely notifications for irrigation, shade control, crop health issues, and market opportunities.'},
       {'num': '4', 'title': 'Take Better Actions', 'desc': 'Use insights to automate tasks, improve crop care, and sell at the right time for better profits.'},
     ];
 
@@ -415,10 +423,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
 
   Widget _buildMarketEngine(bool isDark) {
     final crops = [
-      {'icon': '🌾', 'title': 'Wheat · Nashik Mandi', 'sub': 'Best price today · 12 km away', 'price': '₹2,340', 'change': '↑ +4.2% today', 'up': true},
-      {'icon': '🍅', 'title': 'Tomato · Pune Market', 'sub': 'AI Tip: Wait 3 more days', 'price': '₹890', 'change': '↓ -1.8% today', 'up': false},
-      {'icon': '🌽', 'title': 'Maize · Ahmednagar', 'sub': 'Demand spike detected', 'price': '₹1,650', 'change': '↑ +7.1% this week', 'up': true},
-      {'icon': '🧅', 'title': 'Onion · Lasalgaon', 'sub': 'Top mandi by volume', 'price': '₹2,100', 'change': '↑ Stable', 'up': true},
+      {'icon': '🌾', 'title': 'Wheat · Nashik Mandi', 'sub': 'Best price today · 12 km away', 'price': '₹2,340 / 10 kg', 'change': '↑ +4.2% today', 'up': true},
+      {'icon': '🍅', 'title': 'Tomato · Pune Market', 'sub': 'AI Tip: Wait 3 more days', 'price': '₹890 / 10 kg', 'change': '↓ -1.8% today', 'up': false},
+      {'icon': '🌽', 'title': 'Maize · Ahmednagar', 'sub': 'Demand spike detected', 'price': '₹1,650 / 10 kg', 'change': '↑ +7.1% this week', 'up': true},
+      {'icon': '🧅', 'title': 'Onion · Lasalgaon', 'sub': 'Top mandi by volume', 'price': '₹2,100 / 10 kg', 'change': '↑ Stable', 'up': true},
     ];
 
     return LayoutBuilder(builder: (context, constraints) {
@@ -504,10 +512,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
 
   Widget _buildCommunity(bool isDark) {
     final posts = [
-      {'avatar': '👨‍🌾', 'question': 'My tomato leaves are turning yellow at the edges — is this a nutrient deficiency or disease?', 'answer': 'AI identified likely magnesium deficiency + early blight signs. Community confirms: apply dolomite lime...', 'tag': '🍅 Tomato', 'meta': '47 replies'},
-      {'avatar': '👩‍🌾', 'question': 'Which crops should I plant this Rabi season? My soil has high clay content and rains were below average.', 'answer': 'Based on your location (Vidarbha) and soil report, AI recommends chickpea or sorghum. Community tip...', 'tag': '🌱 Crop Planning', 'meta': '23 replies'},
-      {'avatar': '🧑‍🌾', 'question': 'What\'s the best time to sell onions this year? The price is fluctuating a lot at Lasalgaon mandi.', 'answer': 'Market engine forecasts a 12–15% price rise in the next 8–10 days due to declining arrivals from Karnataka...', 'tag': '🧅 Market', 'meta': '61 replies'},
-      {'avatar': '👨‍🔬', 'question': 'How effective is neem oil against aphids on capsicum?', 'answer': 'Neem oil is highly effective as a preventive measure and for mild infestations. Mix 5ml per liter of water...', 'tag': '🫑 Pest Control', 'meta': '18 replies'},
+      {'avatar': '🍂', 'question': 'Leaves Turning Yellow', 'answer': 'My crop leaves are turning yellow from the edges. Could this be due to overwatering, nutrient deficiency, or something else?', 'tag': 'Crop Health', 'meta': '12 replies'},
+      {'avatar': '💧', 'question': 'Best Time to Irrigate Crops', 'answer': 'When is the most effective time to irrigate for better water absorption—early morning or evening? Looking for practical advice.', 'tag': 'Irrigation', 'meta': '8 replies'},
+      {'avatar': '🐛', 'question': 'Pest Attack on Tomato Plants', 'answer': 'Small holes appearing on tomato leaves and fruits. What could be causing this, and how can I control it naturally?', 'tag': 'Pest Control', 'meta': '24 replies'},
+      {'avatar': '📈', 'question': 'Choosing the Right Market to Sell', 'answer': 'How do you decide the best market to sell your produce? Any tips on getting better prices or timing the sale?', 'tag': 'Market', 'meta': '31 replies'},
     ];
 
     return Column(
@@ -636,7 +644,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           ),
           const SizedBox(height: 40),
           ElevatedButton(
-            onPressed: () {}, 
+            onPressed: () {
+              // Navigating to the Market Model Screen
+              Navigator.pushNamed(context, '/market-model');
+            }, 
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF10B981),
               foregroundColor: Colors.white,

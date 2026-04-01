@@ -547,6 +547,7 @@ class _ForumTabViewState extends State<ForumTabView> {
           right: 16,
           bottom: 90,
           child: FloatingActionButton(
+            heroTag: "community_fab_tag",
             onPressed: () => _showCreateOrEditPostDialog(),
             backgroundColor: isDark ? Colors.blueAccent.shade400 : const Color(0xFF064E3B),
             elevation: 4,

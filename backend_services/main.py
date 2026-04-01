@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.market_service import update_market_summary_cache
-from app.api.routers import sensors, disease, markets, pump, profile, notifications, auth
+from app.api.routers import sensors, disease, markets, pump, profile, notifications, auth, community
 
 # 1. Import your database engine and Base
 from app.db.postgres import engine, Base
@@ -18,7 +18,7 @@ app = FastAPI(title="Smart Irrigation API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -30,6 +30,7 @@ app.include_router(pump.router)
 app.include_router(profile.router)
 app.include_router(notifications.router)
 app.include_router(auth.router)
+app.include_router(community.router)
 
 @app.on_event("startup")
 async def startup_event():
