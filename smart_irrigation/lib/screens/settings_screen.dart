@@ -33,10 +33,14 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with AutomaticKeepAliveClientMixin {
+  
+  @override
+  bool get wantKeepAlive => true;
+
   Offset _mousePosition = Offset.zero;
 
-  bool _autoIrrigationEnabled = true;
+  bool _autoShadeEnabled = true; 
   bool _smsAlertsEnabled = false;
   bool _isLoadingProfile = true;
 
@@ -58,6 +62,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSwitchStates();
     _fetchProfileFromDatabase(); 
     _fetchFieldsFromDatabase(); 
 
@@ -67,6 +72,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showEditProfileDialog(widget.isDarkMode);
       }
     });
+  }
+
+  Future<void> _loadSwitchStates() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _autoShadeEnabled = !(prefs.getBool('shade_override') ?? false);
+        SettingsScreen.pushNotificationsEnabled.value = prefs.getBool('push_notifications') ?? true;
+      });
+    }
+  }
+
+  Future<void> _updateShadeOverride(bool val) async {
+    try {
+      await http.post(
+        Uri.parse('${AppConfig.baseUrl}/control/shade_override'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'override': val}),
+      );
+    } catch (e) {
+      debugPrint("Failed to update shade override: $e");
+    }
   }
 
   Future<void> _fetchDeviceLocation() async {
@@ -159,7 +186,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _userPhone = user['phone'] ?? "Unknown";
               _userLocation = user['location'] ?? "Unknown";
               
-              // NEW: Load SMS preference
               _smsAlertsEnabled = user['sms_alerts'] == true || user['sms_alerts'] == 'true'; 
 
               _isLoadingProfile = false;
@@ -206,7 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       request.fields['email'] = _userEmail;
       request.fields['phone'] = _userPhone;
       request.fields['location'] = _userLocation;
-      request.fields['sms_alerts'] = _smsAlertsEnabled.toString(); // Keep current SMS state
+      request.fields['sms_alerts'] = _smsAlertsEnabled.toString(); 
 
       if (imageBytes != null) {
         request.files.add(
@@ -225,7 +251,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // --- NEW: Optimistic UI update and backend sync for SMS toggling ---
   Future<void> _toggleSMSAlerts(bool newValue) async {
     setState(() {
       _smsAlertsEnabled = newValue;
@@ -247,7 +272,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       request.fields['location'] = _userLocation;
       request.fields['sms_alerts'] = newValue.toString();
 
-      // Only add image if exists
       if (userProfileImageNotifier.value != null) {
         request.files.add(
           http.MultipartFile.fromBytes('profile_pic', userProfileImageNotifier.value!, filename: 'dp.jpg'),
@@ -257,7 +281,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       var response = await request.send();
       
       if (response.statusCode != 200) {
-        // Revert UI if update fails
         setState(() => _smsAlertsEnabled = !newValue);
         debugPrint("Failed to update SMS preference: ${response.statusCode}");
       }
@@ -916,7 +939,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- UPDATED PROFILE CARD (Edit & Sign Out buttons are now safely structured here) ---
   Widget _buildProfileCard(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -946,12 +968,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 ),
               ),
-              const SizedBox(width: 40), // Increased gap between photo and details
+              const SizedBox(width: 40), 
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- NAME & BUTTONS ROW ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1044,7 +1065,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // --- CONTACT INFO ---
                     Row(
                       children: [
                         Icon(Icons.email_rounded, size: 14, color: isDark ? Colors.grey.shade500 : Colors.grey.shade600),
@@ -1268,10 +1288,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "Alerts for critical sensor events",
             Icons.notifications_active_rounded,
             SettingsScreen.pushNotificationsEnabled.value,
-            (val) {
+            (val) async {
               setState(() {
                 SettingsScreen.pushNotificationsEnabled.value = val;
               });
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('push_notifications', val);
             },
             isDark,
           ),
@@ -1280,13 +1302,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             "Send text messages for hardware failures",
             Icons.sms_rounded,
             _smsAlertsEnabled,
-            (val) => _toggleSMSAlerts(val), // NEW: Bound to the async backend call
+            (val) => _toggleSMSAlerts(val), 
             isDark,
           ),
         ],
       ),
     );
   }
+
   Widget _buildSystemControlMode(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1313,12 +1336,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("System Control Mode", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                    Text("Auto-Shade Control Mode", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge!.color)),
                     const SizedBox(height: 4),
                     Text(
-                      _autoIrrigationEnabled 
-                          ? "AI is actively managing water delivery." 
-                          : "Manual override active. You control the pumps.",
+                      _autoShadeEnabled 
+                          ? "AI is actively managing shade deployment." 
+                          : "Manual override active. You control the shade.",
                       style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                     ),
                   ],
@@ -1337,23 +1360,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _autoIrrigationEnabled = true),
+                    onTap: () async {
+                      setState(() => _autoShadeEnabled = true);
+                      _updateShadeOverride(false);
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('shade_override', false);
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: _autoIrrigationEnabled ? (isDark ? const Color(0xFF10B981) : const Color(0xFF064E3B)) : Colors.transparent,
+                        color: _autoShadeEnabled ? (isDark ? const Color(0xFF10B981) : const Color(0xFF064E3B)) : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: _autoIrrigationEnabled 
+                        boxShadow: _autoShadeEnabled 
                             ? [BoxShadow(color: (isDark ? const Color(0xFF10B981) : const Color(0xFF064E3B)).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
                             : [],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.auto_awesome_rounded, size: 18, color: _autoIrrigationEnabled ? Colors.white : Colors.grey.shade500),
+                          Icon(Icons.auto_awesome_rounded, size: 18, color: _autoShadeEnabled ? Colors.white : Colors.grey.shade500),
                           const SizedBox(width: 8),
-                          Text("Smart AI", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _autoIrrigationEnabled ? Colors.white : Colors.grey.shade500)),
+                          Text("Smart AI", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _autoShadeEnabled ? Colors.white : Colors.grey.shade500)),
                         ],
                       ),
                     ),
@@ -1361,23 +1389,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => setState(() => _autoIrrigationEnabled = false),
+                    onTap: () async {
+                      setState(() => _autoShadeEnabled = false);
+                      _updateShadeOverride(true);
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('shade_override', true);
+                    },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: !_autoIrrigationEnabled ? Colors.orangeAccent.shade400 : Colors.transparent,
+                        color: !_autoShadeEnabled ? Colors.orangeAccent.shade400 : Colors.transparent,
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: !_autoIrrigationEnabled 
+                        boxShadow: !_autoShadeEnabled 
                             ? [BoxShadow(color: Colors.orangeAccent.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
                             : [],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.back_hand_rounded, size: 18, color: !_autoIrrigationEnabled ? Colors.white : Colors.grey.shade500),
+                          Icon(Icons.back_hand_rounded, size: 18, color: !_autoShadeEnabled ? Colors.white : Colors.grey.shade500),
                           const SizedBox(width: 8),
-                          Text("Manual", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: !_autoIrrigationEnabled ? Colors.white : Colors.grey.shade500)),
+                          Text("Manual", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: !_autoShadeEnabled ? Colors.white : Colors.grey.shade500)),
                         ],
                       ),
                     ),
@@ -1400,11 +1433,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildSectionHeader("Farm Control", Icons.agriculture_rounded, isDark),
           _buildToggleTile(
-            "Auto-Irrigation Override",
-            "Allow manual control globally",
-            Icons.water_drop_rounded,
-            _autoIrrigationEnabled,
-            (val) => setState(() => _autoIrrigationEnabled = val),
+            "Auto-Shade Mode",
+            "AI actively manages shade deployment",
+            Icons.roofing_rounded,
+            _autoShadeEnabled,
+            (val) async {
+              setState(() => _autoShadeEnabled = val);
+              bool overrideVal = !val; 
+              _updateShadeOverride(overrideVal);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('shade_override', overrideVal);
+            },
             isDark,
           ),
           _buildActionTile(
@@ -1448,6 +1487,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); 
+
     final isDark = widget.isDarkMode;
     double screenWidth = MediaQuery.of(context).size.width;
     bool isDesktop = screenWidth >= 900;
@@ -1549,7 +1590,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       FadeInSlide(index: 3, child: _buildNotificationsSection(isDark)),
                                       const SizedBox(height: 24),
                                       FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
-                                      // Log out button moved to profile card
                                     ],
                                   ),
                                 ),
@@ -1565,7 +1605,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 FadeInSlide(index: 3, child: _buildSystemSection(isDark)),
                                 const SizedBox(height: 24),
                                 FadeInSlide(index: 4, child: _buildSupportSection(isDark)),
-                                // Log out button moved to profile card
                               ],
                             ),
                           const SizedBox(height: 40),

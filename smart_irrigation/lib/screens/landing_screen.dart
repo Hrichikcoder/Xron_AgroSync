@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+
 import '../core/translations.dart';
 import '../widgets/fade_in_slide.dart';
 import 'auth_screen.dart';
@@ -11,510 +14,639 @@ class LandingScreen extends StatefulWidget {
   State<LandingScreen> createState() => _LandingScreenState();
 }
 
-class _LandingScreenState extends State<LandingScreen> with SingleTickerProviderStateMixin {
+class _LandingScreenState extends State<LandingScreen> with TickerProviderStateMixin {
   Offset _mousePosition = Offset.zero;
 
-  // --- UI Builders ---
+  // For the dashboard preview animation
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnim;
 
-  Widget _buildHeroSection(bool isDark) {
-    return Container(
-      width: double.infinity,
-      height: 600,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          )
-        ],
-        image: DecorationImage(
-          image: const NetworkImage(
-              'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=1200&auto=format&fit=crop'),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.6),
-            BlendMode.darken,
+  final List<Map<String, dynamic>> _sensorData = [
+    {'icon': '💧', 'label': 'Soil Moisture', 'value': 62, 'unit': '%', 'trend': '↑ Optimal', 'up': true},
+    {'icon': '🌡️', 'label': 'Temperature', 'value': 28, 'unit': '°C', 'trend': '↑ +2° today', 'up': true},
+    {'icon': '🌫️', 'label': 'Humidity', 'value': 74, 'unit': '%', 'trend': '↓ Dropping', 'up': false},
+    {'icon': '🌧️', 'label': 'Rainfall', 'value': 12, 'unit': 'mm', 'trend': '↑ Above avg', 'up': true},
+  ];
+
+  final List<double> _barHeights = [0.55, 0.62, 0.48, 0.70, 0.65, 0.80, 0.72];
+  Timer? _sensorTimer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    // Simulate live data on the dashboard preview
+    _sensorTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final rng = Random();
+      setState(() {
+        _sensorData[0]['value'] = 60 + rng.nextInt(5);
+        _sensorData[1]['value'] = 27 + rng.nextInt(3);
+        _sensorData[2]['value'] = 72 + rng.nextInt(4);
+        _sensorData[3]['value'] = 11 + rng.nextInt(3);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _sensorTimer?.cancel();
+    super.dispose();
+  }
+
+  void _goToAuth() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AuthScreen()),
+    );
+  }
+
+  // ─── UI COMPONENTS ───
+
+  Widget _buildHero(bool isDark) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth > 900;
+      return Container(
+        padding: const EdgeInsets.only(top: 80, bottom: 40),
+        child: isWide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 5, child: _heroLeft(isDark)),
+                  const SizedBox(width: 48),
+                  Expanded(flex: 5, child: _buildDashboardCard(isDark)),
+                ],
+              )
+            : Column(
+                children: [
+                  _heroLeft(isDark),
+                  const SizedBox(height: 64),
+                  _buildDashboardCard(isDark),
+                ],
+              ),
+      );
+    });
+  }
+
+  Widget _heroLeft(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _pulseAnim,
+                builder: (_, __) => Transform.scale(
+                  scale: _pulseAnim.value,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'AI & IoT Powered Platform',
+                style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+              ),
+            ],
           ),
         ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -1.0,
-              ),
-              children: [
-                const TextSpan(text: "Every Crop Has a Story - Hear It with AgroSync", style: TextStyle(fontSize: 60)),
-              ],
-            ),
+        const SizedBox(height: 24),
+        Text(
+          'Your Farm,\nIntelligently\nConnected',
+          style: TextStyle(
+            fontSize: 64,
+            fontWeight: FontWeight.w900,
+            color: Theme.of(context).textTheme.bodyLarge!.color,
+            height: 1.1,
+            letterSpacing: -1.5,
           ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Text(
-              "AgroSync helps you make better decisions at every stage - from watering and crop health to choosing crops and selling for maximum profit.".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 22,
-                color: Colors.white.withOpacity(0.9),
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1.2,
-              ),
-            ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'AgroSync combines real-time sensor data with AI-driven insights to help you automate irrigation, monitor crop health, choose better crops, and sell at the right time—all from one simple platform.',
+          style: TextStyle(
+            fontSize: 18,
+            height: 1.6,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
           ),
-          const SizedBox(height: 40),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AuthScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 24), 
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-            ),
-            child: Text(
-              "Get Started".tr,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+        ),
+        const SizedBox(height: 40),
+        ElevatedButton(
+          onPressed: _goToAuth,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
           ),
-        ],
-      ),
+          child: Text("Get Started".tr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
   }
 
-  Widget _buildAboutUsSection(bool isDark) {
+  Widget _buildDashboardCard(bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(48),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.8),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200),
-      ),
-      child: Column(
-        children: [
-          Text(
-            "Our Mission & Goals".tr,
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w900,
-              color: Theme.of(context).textTheme.bodyLarge!.color,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            "Our mission is to support farmers with a smart, easy-to-use digital companion that guides them through every step of farming with confidence. By combining AI and IoT, we aim to help farmers use water wisely, monitor crop health, and make better decisions without relying on guesswork. We strive to improve productivity while reducing effort and risk. At the same time, we focus on helping farmers earn more by providing timely market insights and better selling opportunities. Beyond technology, we want to build a strong, supportive community where farmers can share experiences, learn from each other, and grow together."
-                .tr,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1.8,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-      String title, String subtitle, String description, IconData icon, String imageUrl, bool isDark) {
-    return Container(
-      width: 320, 
-      height: 460, 
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE8F4F8), 
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
           )
         ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('🌾 Ramesh\'s Farm — Field A', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                  const SizedBox(height: 4),
+                  Text('📍 Nashik, Maharashtra · 4.2 acres', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                ],
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Text('Live', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12, 
+            mainAxisSpacing: 12, 
+            childAspectRatio: 2.2, 
+            children: _sensorData.map((s) => _sensorTile(s, isDark)).toList(),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      style: TextStyle(fontSize: 12, color: isDark ? Colors.grey.shade300 : Colors.grey.shade800),
+                      children: const [
+                        TextSpan(text: 'AI detected early blight on tomato plant in Zone B — '),
+                        TextSpan(text: 'tap to view', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _sensorTile(Map<String, dynamic> s, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(12), 
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(24.0), 
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12), 
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))
-                    ]
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 28), 
-                ),
-                const SizedBox(height: 16), 
-                Text(
-                  title.tr,
-                  style: TextStyle(
-                    fontSize: 22, 
-                    fontWeight: FontWeight.w900,
-                    color: Theme.of(context).textTheme.bodyLarge!.color,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle.tr,
-                  style: const TextStyle(
-                    fontSize: 12, 
-                    fontWeight: FontWeight.bold, 
-                    color: Color(0xFF10B981)
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  description.tr,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14, 
-                    height: 1.5,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
-                  ),
-                ),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(s['icon'], style: const TextStyle(fontSize: 18)), 
+              Text(
+                s['trend'],
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: s['up'] ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+              ),
+            ],
           ),
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-            // MODIFIED: Changed from Image.network to Image.asset
-            child: Image.asset(
-              imageUrl,
-              height: 140, 
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
+          const Spacer(),
+          Text(s['label'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('${s['value']}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
+              const SizedBox(width: 4),
+              Text(s['unit'], style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFeaturesSection(bool isDark) {
+  Widget _buildFeatures(bool isDark) {
+    final features = [
+      {'icon': Icons.sensors, 'title': 'IoT Sensor Network', 'desc': 'Monitor your farm in real time with sensors tracking soil moisture, temperature, humidity, and rainfall—giving you accurate, continuous insights into field conditions.', 'tags': ['Soil Moisture', 'Temperature', 'Rainfall', 'Humidity']},
+      {'icon': Icons.water_drop, 'title': 'Automated Irrigation', 'desc': 'Irrigate only when needed using smart automation based on real-time data, helping you save water, reduce effort, and maintain optimal crop conditions.', 'tags': ['Smart Scheduling', 'Water Saving', 'Auto-Trigger']},
+      {'icon': Icons.healing, 'title': 'Crop Disease Detection', 'desc': 'Detect crop diseases early by simply uploading an image. Get instant insights and clear guidance to protect your crops before damage spreads.', 'tags': ['Image Analysis', '50+ Diseases', 'Instant Results']},
+      {'icon': Icons.grass, 'title': 'Crop Recommendation', 'desc': 'Receive crop suggestions based on your soil, weather, and market trends to choose what grows best and brings higher returns.', 'tags': ['Soil Analysis', 'Season-Aware', 'Profit-Optimized']},
+      {'icon': Icons.trending_up, 'title': 'Market Price Engine', 'desc': 'Track live market prices and demand trends to decide the best time and place to sell, ensuring you get the maximum value for your produce.', 'tags': ['Live Prices', 'Best Market', 'Sell Alerts']},
+      {'icon': Icons.forum, 'title': 'Farmer Community', 'desc': 'Connect with farmers, share experiences, ask questions, and learn practical solutions from a supportive and growing community.', 'tags': ['Q&A Forum', 'Expert Advice', 'Multilingual']},
+    ];
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, 
+      crossAxisAlignment: CrossAxisAlignment.center, 
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Text(
-            "Platform Features".tr,
-            style: TextStyle(
-              fontSize: 36, 
-              fontWeight: FontWeight.w900,
-              color: Theme.of(context).textTheme.bodyLarge!.color,
-              letterSpacing: -0.5,
-            ),
-          ),
+        Text('Everything You Need, From Soil to Sale', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, letterSpacing: -0.5)),
+        const SizedBox(height: 16),
+        Text(
+          'AgroSync brings together automation, intelligence, and market insights to support every stage of your farming journey.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         ),
-        const SizedBox(height: 32),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          clipBehavior: Clip.none,
-          child: Row(
-            children: [
-              const SizedBox(width: 8), 
-              _buildFeatureCard(
-                "Community Forum",
-                "🌱 Learn Together, Grow Together",
-                "Connect with farmers, share real problems, and discover practical solutions. Learn from others' experiences, get advice, and build a supportive network that helps you make better farming decisions.",
-                Icons.forum_rounded,
-                // MODIFIED: Replaced URL with asset path
-                "assets/community_feature.jpg", 
-                isDark,
-              ),
-              const SizedBox(width: 24),
-              _buildFeatureCard(
-                "Smart Automation",
-                "🤖 Farming That Works for You",
-                "Automate irrigation and farm operations using real-time sensor data. Save water, reduce manual effort, and ensure your crops receive the right care at the right time without constant monitoring.",
-                Icons.memory_rounded,
-                // MODIFIED: Replaced URL with asset path
-                "assets/automation_feature.jpg", 
-                isDark,
-              ),
-              const SizedBox(width: 24),
-              _buildFeatureCard(
-                "Crop Doctor",
-                "🌿 Know Your Crop’s Health Instantly",
-                "Upload crop images to detect diseases early and receive simple treatment guidance. Prevent damage, improve crop health, and take timely action with AI-powered insights tailored to your farm.",
-                Icons.healing_rounded,
-                // MODIFIED: Replaced URL with asset path
-                "assets/crop_doctor_feature.jpg", 
-                isDark,
-              ),
-              const SizedBox(width: 24),
-              _buildFeatureCard(
-                "Market Engine",
-                "📈 Sell at the Right Time, Every Time",
-                "Track live market prices and demand trends to make informed selling decisions. Choose the best time and place to sell your produce and maximize profits with data-driven insights.",
-                Icons.trending_up_rounded,
-                // MODIFIED: Replaced URL with asset path
-                "assets/market_feature.jpg", 
-                isDark,
-              ),
-              const SizedBox(width: 8), 
-            ],
+        const SizedBox(height: 48),
+        Center(
+          child: Wrap(
+            spacing: 24,
+            runSpacing: 24,
+            alignment: WrapAlignment.center,
+            children: features.map((f) {
+              return Container(
+                width: 360,
+                height: 400, 
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 20, offset: const Offset(0, 10))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: Icon(f['icon'] as IconData, color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(f['title'] as String, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                    const SizedBox(height: 12),
+                    Text(
+                      f['desc'] as String,
+                      style: TextStyle(fontSize: 14, height: 1.5, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+                    ),
+                    const Spacer(),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (f['tags'] as List<String>).map((t) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(t, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                      )).toList(),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildJourneyStep(String stepNumber, String title, String description, IconData icon, bool isDark) {
-    return Container(
-      width: 300,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            right: -10,
-            top: -20,
-            child: Text(
-              stepNumber,
-              style: TextStyle(
-                fontSize: 100,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-                height: 1.0,
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 40, color: const Color(0xFF10B981)),
-              const SizedBox(height: 24),
-              Text(
-                title.tr,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: Theme.of(context).textTheme.bodyLarge!.color,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                description.tr,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.5,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildHowItWorks(bool isDark) {
+    final steps = [
+      {'num': '1', 'title': 'Set Up Sensors', 'desc': 'Install sensors on your farm to start collecting real-time environmental data instantly.'},
+      {'num': '2', 'title': 'AI Analyzes Data', 'desc': 'The system processes sensor data along with weather and trends to understand your farm’s condition.'},
+      {'num': '3', 'title': 'Get Smart Alerts', 'desc': 'Receive timely notifications for irrigation, crop health issues, and market opportunities.'},
+      {'num': '4', 'title': 'Take Better Actions', 'desc': 'Use insights to automate tasks, improve crop care, and sell at the right time for better profits.'},
+    ];
 
-  Widget _buildJourneySection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          "How AgroSync Works".tr,
-          style: TextStyle(
-            fontSize: 36,
-            fontWeight: FontWeight.w900,
-            color: Theme.of(context).textTheme.bodyLarge!.color,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          "See how AgroSync transforms your farm step by step, turning real-time data into smarter decisions, better crop care, and higher profits.".tr,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 18,
-            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-          ),
-        ),
+        Text('From Data to Decisions, Seamlessly', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, letterSpacing: -0.5)),
         const SizedBox(height: 48),
         Wrap(
           spacing: 24,
           runSpacing: 24,
           alignment: WrapAlignment.center,
-          children: [
-            _buildJourneyStep(
-              "1",
-              "Register & Setup",
-              "Get started in minutes. Create your profile, add your farm location, and select your crops to unlock personalized insights from day one.",
-              Icons.app_registration_rounded,
-              isDark,
+          children: steps.map((s) => Container(
+            width: 280,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.03) : Colors.white.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200),
             ),
-            _buildJourneyStep(
-              "2",
-              "Sync Hardware",
-              "Connect your sensors seamlessly to start capturing real-time data on soil, weather, and field conditions - no technical hassle required.",
-              Icons.wifi_tethering_rounded,
-              isDark,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  right: -10, top: -20,
+                  child: Text(
+                    s['num']!,
+                    style: TextStyle(fontSize: 100, fontWeight: FontWeight.w900, color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03), height: 1.0),
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s['title']!, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                    const SizedBox(height: 12),
+                    Text(s['desc']!, style: TextStyle(fontSize: 15, height: 1.5, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600)),
+                  ],
+                ),
+              ],
             ),
-            _buildJourneyStep(
-              "3",
-              "Monitor & Automate",
-              "Track your farm live and automate irrigation based on smart conditions - saving water, time, and effort while improving crop health.",
-              Icons.dashboard_customize_rounded,
-              isDark,
-            ),
-            _buildJourneyStep(
-              "4",
-              "Harvest & Profit",
-              "Make smarter selling decisions with live market insights, demand trends, and community discussions to expand reach and maximize your earnings.",
-              Icons.monetization_on_rounded,
-              isDark,
-            ),
-          ],
+          )).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildSdgBox(String number, String title, IconData icon, Color color) {
-    return Container(
-      width: 150, 
-      height: 150, 
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12), 
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          )
-        ]
-      ),
-      child: Column(
+  Widget _buildMarketEngine(bool isDark) {
+    final crops = [
+      {'icon': '🌾', 'title': 'Wheat · Nashik Mandi', 'sub': 'Best price today · 12 km away', 'price': '₹2,340', 'change': '↑ +4.2% today', 'up': true},
+      {'icon': '🍅', 'title': 'Tomato · Pune Market', 'sub': 'AI Tip: Wait 3 more days', 'price': '₹890', 'change': '↓ -1.8% today', 'up': false},
+      {'icon': '🌽', 'title': 'Maize · Ahmednagar', 'sub': 'Demand spike detected', 'price': '₹1,650', 'change': '↑ +7.1% this week', 'up': true},
+      {'icon': '🧅', 'title': 'Onion · Lasalgaon', 'sub': 'Top mandi by volume', 'price': '₹2,100', 'change': '↑ Stable', 'up': true},
+    ];
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final isWide = constraints.maxWidth > 900;
+      final leftContent = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Text('Know When and Where to Sell', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, letterSpacing: -0.5)),
+          const SizedBox(height: 16),
+          Text(
+            'AgroSync tracks market prices and trends across locations, helping you choose the right time and place to sell so you never miss better opportunities.',
+            style: TextStyle(fontSize: 18, height: 1.5, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: _goToAuth,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('View Market Dashboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+        ],
+      );
+
+      final rightContent = Column(
+        children: crops.map((c) => Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Row(
             children: [
-              Text(
-                number,
-                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, height: 1.0), 
+              Container(
+                width: 50, height: 50,
+                decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: Center(child: Text(c['icon'] as String, style: const TextStyle(fontSize: 24))),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white, height: 1.1), 
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(c['title'] as String, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                    const SizedBox(height: 4),
+                    Text(c['sub'] as String, style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                  ],
                 ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(c['price'] as String, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF10B981))),
+                  const SizedBox(height: 4),
+                  Text(c['change'] as String, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: (c['up'] as bool) ? const Color(0xFF10B981) : const Color(0xFFEF4444))),
+                ],
               ),
             ],
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Icon(icon, color: Colors.white, size: 56), 
+        )).toList(),
+      );
+
+      return isWide
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: leftContent),
+                const SizedBox(width: 64),
+                Expanded(child: rightContent),
+              ],
+            )
+          : Column(
+              children: [leftContent, const SizedBox(height: 48), rightContent],
+            );
+    });
+  }
+
+  Widget _buildCommunity(bool isDark) {
+    final posts = [
+      {'avatar': '👨‍🌾', 'question': 'My tomato leaves are turning yellow at the edges — is this a nutrient deficiency or disease?', 'answer': 'AI identified likely magnesium deficiency + early blight signs. Community confirms: apply dolomite lime...', 'tag': '🍅 Tomato', 'meta': '47 replies'},
+      {'avatar': '👩‍🌾', 'question': 'Which crops should I plant this Rabi season? My soil has high clay content and rains were below average.', 'answer': 'Based on your location (Vidarbha) and soil report, AI recommends chickpea or sorghum. Community tip...', 'tag': '🌱 Crop Planning', 'meta': '23 replies'},
+      {'avatar': '🧑‍🌾', 'question': 'What\'s the best time to sell onions this year? The price is fluctuating a lot at Lasalgaon mandi.', 'answer': 'Market engine forecasts a 12–15% price rise in the next 8–10 days due to declining arrivals from Karnataka...', 'tag': '🧅 Market', 'meta': '61 replies'},
+      {'avatar': '👨‍🔬', 'question': 'How effective is neem oil against aphids on capsicum?', 'answer': 'Neem oil is highly effective as a preventive measure and for mild infestations. Mix 5ml per liter of water...', 'tag': '🫑 Pest Control', 'meta': '18 replies'},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Column(
+            children: [
+              Text('A Community That Farms Together', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color, letterSpacing: -0.5), textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              Text(
+                'Learn from real experiences, get expert-backed advice, and solve everyday farming problems with a network that grows stronger together.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 48),
+        
+        // Horizontal scrolling row replacing the wrap
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.none,
+          child: Row(
+            children: posts.map((p) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 24.0),
+                child: Container(
+                  width: 400, // Fixed width for horizontal scrolling
+                  height: 240, 
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.1 : 0.02), blurRadius: 15, offset: const Offset(0, 8))],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: Colors.grey.withOpacity(0.1), shape: BoxShape.circle),
+                        child: Center(child: Text(p['avatar']!, style: const TextStyle(fontSize: 20))),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(p['question']!, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge!.color), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 8),
+                      Text(p['answer']!, style: TextStyle(fontSize: 13, height: 1.4, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            child: Text(p['tag']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                          ),
+                          const Spacer(),
+                          Text(p['meta']!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        
+        const SizedBox(height: 48),
+        Center(
+          child: ElevatedButton(
+            onPressed: _goToAuth,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text('Explore Community', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                SizedBox(width: 8),
+                Icon(Icons.arrow_forward_rounded, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildSdgBanner() {
+  Widget _buildCTA() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32), 
+      padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 32),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
         gradient: const LinearGradient(
-          colors: [Color(0xFF064E3B), Color(0xFF0F172A)], 
+          colors: [Color(0xFF064E3B), Color(0xFF0F172A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          )
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.public, color: Colors.white, size: 40), 
-              const SizedBox(width: 16),
-              Text(
-                "Sustainable Development Goals".tr,
-                style: const TextStyle(
-                  fontSize: 32, 
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           const Text(
-            "AgroSync is committed to building a sustainable future aligned with the United Nations.",
+            "Ready to Farm Smarter?",
+            style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: -0.5),
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18, 
-              color: Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
           ),
-          const SizedBox(height: 48),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            clipBehavior: Clip.none, 
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildSdgBox("2", "ZERO\nHUNGER", Icons.soup_kitchen_rounded, const Color(0xFFDDA63A)),
-                const SizedBox(width: 16),
-                _buildSdgBox("6", "CLEAN WATER\nAND SANITATION", Icons.water_drop_rounded, const Color(0xFF26BDE2)),
-                const SizedBox(width: 16),
-                _buildSdgBox("8", "DECENT WORK AND\nECONOMIC GROWTH", Icons.trending_up_rounded, const Color(0xFFA21942)),
-                const SizedBox(width: 16),
-                _buildSdgBox("9", "INDUSTRY, INNOVATION\n& INFRASTRUCTURE", Icons.precision_manufacturing_rounded, const Color(0xFFFD6925)),
-                const SizedBox(width: 16),
-                _buildSdgBox("13", "CLIMATE\nACTION", Icons.public_rounded, const Color(0xFF3F7E44)),
-                const SizedBox(width: 16),
-                _buildSdgBox("17", "PARTNERSHIPS\nFOR THE GOALS", Icons.handshake_rounded, const Color(0xFF19486A)),
-              ],
-            ),
+          const SizedBox(height: 16),
+          const Text(
+            "Join thousands of farmers using AgroSync to simplify decisions, reduce effort, and improve profits. Start for free and experience smarter irrigation, better crop care, and data-driven selling—without any complexity.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, color: Colors.white70, fontWeight: FontWeight.w500),
           ),
-        ]
+          const SizedBox(height: 40),
+          ElevatedButton(
+            onPressed: () {}, 
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+            child: const Text("🌿 Start for Free — No Cost", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -531,7 +663,7 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
         elevation: 0,
         title: Row(
           children: [
-            Image.asset('assets/plant_icon.png', height: 48), 
+            Image.asset('assets/plant_icon.png', height: 48),
             const SizedBox(width: 12),
             RichText(
               text: TextSpan(
@@ -539,7 +671,7 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
                   fontWeight: FontWeight.w900,
                   color: Theme.of(context).textTheme.bodyLarge!.color,
                   letterSpacing: -0.5,
-                  fontSize: 42, 
+                  fontSize: 42,
                 ),
                 children: [
                   const TextSpan(text: "Agro"),
@@ -549,29 +681,6 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => AuthScreen()));
-            },
-            child: Text("Sign In".tr, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color, fontWeight: FontWeight.bold, fontSize: 18)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0), 
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => AuthScreen()));
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: Text("Sign Up".tr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-          ),
-        ],
       ),
       body: MouseRegion(
         onHover: (event) {
@@ -620,26 +729,27 @@ class _LandingScreenState extends State<LandingScreen> with SingleTickerProvider
             SafeArea(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0), 
+                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1400), 
+                    constraints: const BoxConstraints(maxWidth: 1400),
                     child: Column(
                       children: [
-                        FadeInSlide(index: 0, child: _buildHeroSection(isDark)),
-                        const SizedBox(height: 80), 
-                        FadeInSlide(index: 1, child: _buildAboutUsSection(isDark)),
-                        const SizedBox(height: 100), 
-                        FadeInSlide(index: 2, child: _buildFeaturesSection(isDark)),
-                        const SizedBox(height: 120), 
-                        FadeInSlide(index: 3, child: _buildJourneySection(isDark)), 
-                        const SizedBox(height: 120), 
-                        FadeInSlide(index: 4, child: _buildSdgBanner()), 
-                        const SizedBox(height: 100), 
-                        
+                        FadeInSlide(index: 0, child: _buildHero(isDark)),
+                        const SizedBox(height: 80),
+                        FadeInSlide(index: 1, child: _buildFeatures(isDark)),
+                        const SizedBox(height: 120),
+                        FadeInSlide(index: 2, child: _buildHowItWorks(isDark)),
+                        const SizedBox(height: 120),
+                        FadeInSlide(index: 3, child: _buildMarketEngine(isDark)),
+                        const SizedBox(height: 120),
+                        FadeInSlide(index: 4, child: _buildCommunity(isDark)),
+                        const SizedBox(height: 120),
+                        FadeInSlide(index: 5, child: _buildCTA()),
+                        const SizedBox(height: 100),
                         Divider(color: isDark ? Colors.white24 : Colors.black12),
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 32.0), 
+                          padding: const EdgeInsets.symmetric(vertical: 32.0),
                           child: Text(
                             "© 2026 AgroSync by Team XRON. All rights reserved.",
                             style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold, fontSize: 16),

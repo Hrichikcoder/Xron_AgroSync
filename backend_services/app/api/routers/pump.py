@@ -9,7 +9,6 @@ async def control_pump(command: PumpControl):
     state.pump_mode = command.mode
     state.pump1_state = command.pump1
     state.pump2_state = command.pump2
-    state.shade_state = command.shade
     state.sprinkler_state = command.sprinkler
     
     return {
@@ -18,11 +17,20 @@ async def control_pump(command: PumpControl):
             "mode": state.pump_mode,
             "pump1": state.pump1_state,
             "pump2": state.pump2_state,
-            "shade": state.shade_state,
-            "sprinkler": state.sprinkler_state, # <--- COMMA ADDED HERE
+            "sprinkler": state.sprinkler_state,
             "target_volume": getattr(state, "target_volume", 500.0)
         }
     }
+
+@router.post("/shade")
+async def control_shade(payload: dict):
+    state.shade_state = payload.get("shade", False)
+    return {"message": "Shade state updated", "shade": state.shade_state}
+
+@router.post("/shade_override")
+async def set_shade_override(payload: dict):
+    state.shade_override = payload.get("override", False)
+    return {"message": "Shade override updated", "override": getattr(state, "shade_override", False)}
 
 @router.get("/status")
 async def get_pump_status():
@@ -37,8 +45,7 @@ async def get_pump_status():
         "sprinkler": state.sprinkler_state,
         "target_volume": getattr(state, "target_volume", 500.0), 
         "run_diag": should_run_diag,
-        
-        # --- ADDED: Sensor Override States for ESP32 ---
+        "shade_override": getattr(state, "shade_override", False),
         "disable_soil_moisture": getattr(state, "disable_soil_moisture", False),
         "disable_depth": getattr(state, "disable_depth", False),
         "disable_temperature": getattr(state, "disable_temperature", False),

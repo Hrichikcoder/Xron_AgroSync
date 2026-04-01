@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'dashboard_screen.dart'; 
+// MODIFIED: Import the system overview screen instead of the dashboard
+import 'system_overview_screen.dart'; 
 import '../core/app_config.dart';
 import '../widgets/fade_in_slide.dart';
 
@@ -51,9 +52,11 @@ class _OtpScreenState extends State<OtpScreen> {
           await prefs.setString('jwt_token', token);
           
           if (!mounted) return;
+          
+          // MODIFIED: Route to SystemOverviewScreen after successful OTP verification
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const DashboardScreen()),
+            MaterialPageRoute(builder: (context) => const SystemOverviewScreen()),
             (Route<dynamic> route) => false,
           );
         } else if (data['is_registered'] == false) {

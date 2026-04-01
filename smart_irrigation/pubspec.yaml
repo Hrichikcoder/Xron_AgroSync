@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
 
+  google_fonts: ^8.0.2
   # Location and Geocoding packages
   geolocator: ^14.0.2
   geocoding: ^4.0.0

@@ -19,6 +19,7 @@ ALGORITHM = "HS256"
 TEXTBEE_API_KEY = "d5420e5b-f4d3-469a-9003-d343de65c4a1"
 TEXTBEE_DEVICE_ID = "69c546b6c3538b609d13d100"
 
+
 class PhonePayload(BaseModel):
     phone: str
     is_register: bool = False

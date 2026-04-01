@@ -22,7 +22,11 @@ class MarketScreen extends StatefulWidget {
   State<MarketScreen> createState() => _MarketScreenState();
 }
 
-class _MarketScreenState extends State<MarketScreen> {
+class _MarketScreenState extends State<MarketScreen> with AutomaticKeepAliveClientMixin {
+  
+  @override
+  bool get wantKeepAlive => true; // Preserves state when switching tabs
+
   List<Map<String, dynamic>> allCrops = [];
   List<Map<String, dynamic>> displayedCrops = [];
   List<Map<String, dynamic>> userAddedCrops = [];
@@ -1272,6 +1276,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // REQUIRED for AutomaticKeepAliveClientMixin
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).textTheme.bodyLarge!.color;
 

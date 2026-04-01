@@ -13,6 +13,10 @@ import 'crop_doctor_screen.dart';
 import 'market_screen.dart';
 import 'settings_screen.dart';
 import '../core/app_config.dart';
+import 'community_screen.dart';
+
+// MODIFIED: Added this import to allow routing to the Overview
+import 'system_overview_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SensorsScreen(),
         const CropDoctorScreen(),
         const MarketScreen(),
+        const CommunityScreen(),
         SettingsScreen(
           isDarkMode: SmartIrrigationApp.themeNotifier.value == ThemeMode.dark,
           onThemeChanged: (bool isDark) {
@@ -430,6 +435,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ],
             ),
             actions: [
+              // MODIFIED: Added this help button to route back to the Overview Page
+              IconButton(
+                icon: Icon(
+                  Icons.help_outline_rounded,
+                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                ),
+                tooltip: 'System Overview',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SystemOverviewScreen()),
+                  );
+                },
+              ),
+              
               ValueListenableBuilder<List<AppNotification>>(
                 valueListenable: SmartIrrigationApp.notificationsNotifier,
                 builder: (context, notifications, child) {
@@ -499,26 +519,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           )
         : null,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOutQuart,
-        switchOutCurve: Curves.easeInQuart,
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.0, 0.05),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: Container(
-          key: ValueKey<int>(_selectedIndex),
-          child: _screens[_selectedIndex],
-        ),
+      // USING INDEXEDSTACK PREVENTS PAGES FROM RELOADING OR VANISHING
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -555,6 +559,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               BottomNavigationBarItem(
                 icon: const Icon(Icons.storefront_rounded),
                 label: 'Market'.tr,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.forum_rounded), // <-- Added this back
+                label: 'Community'.tr,
               ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.settings_rounded),

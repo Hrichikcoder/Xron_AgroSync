@@ -3,15 +3,13 @@
 #include "globals.h"
 #include "network_sensors.h"
 
-// Define new global variables for the servo here
 bool manualShade = false;
-bool lastShadeState = false; 
+bool lastShadeState = false;
+bool shadeOverride = false; 
 Servo shadeServo;
 
-// --- Safe ESP32 Interrupt Handling ---
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
-// Interrupt Service Routine (ISR) for the Flow Sensor
 void IRAM_ATTR countPulse() {
   portENTER_CRITICAL_ISR(&mux);
   pulseCount++;
@@ -27,7 +25,7 @@ void setup() {
   Serial.println("Step 1: Configuring Pins...");
   pinMode(PUMP1_PIN, OUTPUT);
   pinMode(PUMP2_PIN, OUTPUT);
-  pinMode(SPRINKLER_PIN, OUTPUT); 
+  pinMode(SPRINKLER_PIN, OUTPUT);
   pinMode(DEPTH_SENSOR_PIN, INPUT);
   pinMode(CAP_SENSOR_PIN, INPUT); 
   
@@ -37,17 +35,16 @@ void setup() {
   dht.begin();
   pinMode(LDR_PIN, INPUT);
   pinMode(RAIN_PIN, INPUT);
-  
-  // Initialize Servo with custom pulse width and frequency
-  shadeServo.setPeriodHertz(100);
+
+  shadeServo.setPeriodHertz(50);
   shadeServo.attach(SERVO_PIN, 500, 2400);
-  shadeServo.write(0); // Start retracted
+  shadeServo.write(0);
   
   Serial.println("Step 2: Forcing Pumps to Initial OFF State...");
   digitalWrite(PUMP1_PIN, HIGH); 
   digitalWrite(PUMP2_PIN, HIGH);
-  digitalWrite(SPRINKLER_PIN, LOW); 
-  
+  digitalWrite(SPRINKLER_PIN, LOW);
+
   Serial.println("Step 3: Connecting to WiFi...");
   WiFi.disconnect(true);
   delay(100);
@@ -75,24 +72,18 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  // --- 1. Dedicated 1-Second Flow Calculation ---
   if (currentMillis - lastFlowMillis >= 1000) {
     unsigned long currentPulses = 0;
 
-    // Safely read and reset pulse count WITHOUT detaching the interrupt
     portENTER_CRITICAL(&mux);
     currentPulses = pulseCount;
     pulseCount = 0;
     portEXIT_CRITICAL(&mux);
 
-    // Calculate elapsed time precisely
     float elapsedSeconds = (currentMillis - lastFlowMillis) / 1000.0;
-
-    // Calculate flow rate (L/min)
     float frequency = currentPulses / elapsedSeconds;
-    currentFlowRate = frequency / calibrationFactor; 
+    currentFlowRate = frequency / calibrationFactor;
 
-    // Calculate exact volume added based on pulses
     float mlPerPulse = 1000.0 / (calibrationFactor * 60.0);
     float volumeAdded = currentPulses * mlPerPulse;
 
@@ -103,62 +94,69 @@ void loop() {
   int depthValue = analogRead(DEPTH_SENSOR_PIN);
   int capValue = analogRead(CAP_SENSOR_PIN);
   
-  // 1. Soil Moisture: 1500 is "Wet". Auto-pump triggers at > 2000. 
-  // Forcing 1500 ensures the pump stays OFF and ML sees "normal wet soil".
   if (disableSoil) capValue = 1500; 
-  
-  // 2. Tank Depth: 2000 is "Half Full". Emergency refill triggers at <= 0.
-  // Forcing 2000 ensures Phase 2 (Refill Pump) doesn't accidentally trigger.
   if (disableDepth) depthValue = 2000; 
 
-  // --- Fetch Backend Override Status (Every 3 seconds) ---
   if (currentMillis - lastOverrideCheck >= overrideInterval) {
     checkBackendOverride();
     lastOverrideCheck = currentMillis;
   }
   
-  // --- Evaluate Shade Position ---
-  if (manualShade != lastShadeState) {
-    if (manualShade) {
+  int currentLdr = analogRead(LDR_PIN);
+  int currentRain = analogRead(RAIN_PIN);
+  if (disableLdr) currentLdr = 1000;
+  if (disableRain) currentRain = 4095;
+
+  bool desiredShade = lastShadeState;
+
+  if (!shadeOverride) {
+    if (currentRain < 1800 || currentLdr > 2200) {
+      desiredShade = true;
+    } else if (currentRain > 2200 && currentLdr < 1800) {
+      desiredShade = false;
+    }
+  } else {
+    desiredShade = manualShade;
+  }
+
+  if (desiredShade != lastShadeState) {
+    if (desiredShade) {
       for (int pos = 0; pos <= 180; pos += 2) { 
         shadeServo.write(pos);
         delay(5); 
       }
+      Serial.println("\n>>> ACTION: Farm Shade DEPLOYED <<<");
     } else {
       for (int pos = 180; pos >= 0; pos -= 2) { 
         shadeServo.write(pos);
         delay(5); 
       }
+      Serial.println("\n>>> ACTION: Farm Shade RETRACTED <<<");
     }
-    lastShadeState = manualShade; 
+    lastShadeState = desiredShade;
   }
 
-  // --- Evaluate Sprinkler State ---
   digitalWrite(SPRINKLER_PIN, manualSprinkler ? HIGH : LOW);
-  
-  // --- Print & Transmit Environmental Sensors (Every 5 Seconds) ---
+
   if (currentMillis - lastEnvPrintTime >= envPrintInterval) {
     printEnvironmentSensors();
+
     float h = dht.readHumidity();
     float t = dht.readTemperature();
     int ldrValue = analogRead(LDR_PIN);
     int rainValue = analogRead(RAIN_PIN);
-    
-    if (disableTemp) {
-       t = 25.0; // 25 Celsius
-       h = 50.0; // 50% Humidity
-    }
-    if (disableLdr) ldrValue = 1000; // Normal daylight
-    if (disableRain) rainValue = 4095; // 4095 = Dry / No rain
-    
 
+    if (disableTemp) {
+       t = 25.0;
+       h = 50.0;
+    }
+    if (disableLdr) ldrValue = 1000;
+    if (disableRain) rainValue = 4095;
+    
     sendSensorDataToBackend(t, h, ldrValue, capValue, rainValue, depthValue, currentVolume, currentFlowRate);
     lastEnvPrintTime = currentMillis;
   }
   
-  // ==========================================
-  // MANUAL OVERRIDE MODE
-  // ==========================================
   if (currentMode == "manual") {
      digitalWrite(PUMP1_PIN, manualPump1 ? LOW : HIGH);
      digitalWrite(PUMP2_PIN, manualPump2 ? LOW : HIGH);
@@ -173,15 +171,10 @@ void loop() {
         lastPrintTime = currentMillis;
      }
      delay(50);
-     return; // Bypass Auto state logic completely
+     return; 
   }
 
-  // ==========================================
-  // AUTO MODE LOGIC
-  // ==========================================
-
   if (currentPhase == 1) {
-    
     if (depthValue <= 0) {
       currentPhase = 2;
       pump1Running = false;
@@ -204,8 +197,7 @@ void loop() {
 
     if (!pump1Running && targetVolumeReached) {
       if (currentMillis - volumeReachedTime >= restartDelay) {
-        lastCycleVolume = currentVolume; 
-
+        lastCycleVolume = currentVolume;
         targetVolumeReached = false;
         currentVolume = 0.0;
         
@@ -247,7 +239,6 @@ void loop() {
       lastPrintTime = currentMillis;
     }
   }
-  
   else if (currentPhase == 2) {
     digitalWrite(PUMP1_PIN, HIGH);
     digitalWrite(PUMP2_PIN, LOW);   

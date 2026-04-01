@@ -20,7 +20,11 @@ class SensorsScreen extends StatefulWidget {
   State<SensorsScreen> createState() => _SensorsScreenState();
 }
 
-class _SensorsScreenState extends State<SensorsScreen> {
+class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveClientMixin {
+  
+  @override
+  bool get wantKeepAlive => true; 
+
   bool _isSystemOn = true;
 
   String _pumpMode = "auto";
@@ -39,9 +43,8 @@ class _SensorsScreenState extends State<SensorsScreen> {
   String _sensorHumidity = "63";
   String _sensorSoilMoisture = "45";
   
-  // Flow Rate Variables
-  String _sensorWaterFlow = "0.0"; // Stores total volume
-  String _sensorWaterFlowRate = "0.00"; // Stores real-time mL/sec
+  String _sensorWaterFlow = "0.0"; 
+  String _sensorWaterFlowRate = "0.00"; 
 
   String _lastCycleVolume = "0.0";
   String _sensorLight = "850";
@@ -60,7 +63,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   List<Map<String, dynamic>> _waterFlowHistory = [];
 
-  // Dynamic Variables for Fields
   String? _selectedField; 
   Map<String, String> _userFields = {}; 
 
@@ -69,18 +71,20 @@ class _SensorsScreenState extends State<SensorsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchFields(); // Initial Fetch
+    _loadPersistedState(); 
+    _fetchFields(); 
     _fetchInitialHistory();
     _initLocationAndWeather();
     _fetchSensorData();
     _fetchLiveFlowData();
-    // Timer checks every 3 seconds
+    
     _timer = Timer.periodic(
       const Duration(seconds: 3),
       (timer) {
+        _syncSettings(); 
         if (_isSystemOn) {
           _fetchSensorData();
-          _fetchFields(); // Keep fields dynamically updated!
+          _fetchFields(); 
         }
       },
     );
@@ -101,8 +105,26 @@ class _SensorsScreenState extends State<SensorsScreen> {
     super.dispose();
   }
 
+  Future<void> _loadPersistedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isSystemOn = prefs.getBool('system_on') ?? true;
+        _shadeOverride = prefs.getBool('shade_override') ?? false;
+      });
+    }
+  }
+
+  Future<void> _syncSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _shadeOverride = prefs.getBool('shade_override') ?? false;
+      });
+    }
+  }
+
   Future<void> _fetchLiveFlowData() async {
-    // Early exit: Prevent any fetching if the system is turned off
     if (!_isSystemOn) return; 
 
     try {
@@ -114,18 +136,15 @@ class _SensorsScreenState extends State<SensorsScreen> {
             _sensorWaterFlow = data['water_flow']?.toString() ?? "0.0";
             _sensorWaterFlowRate = data['flow_rate']?.toString() ?? "0.00";
             
-            // Animation strictly runs only when flow rate is greater than 0
             _motorRunning = (double.tryParse(_sensorWaterFlowRate) ?? 0.0) > 0;
           });
         }
       }
     } catch (e) {
-      // Silently catch errors here to prevent console spam from the 1-second fast poller
     }
   }
 
   Future<void> _updateActiveFieldInBackend(String fieldName) async {
-    // Extract the numeric area from the string "X Acres"
     String areaStr = _userFields[fieldName]!.replaceAll(" Acres", "");
     double areaAcres = double.tryParse(areaStr) ?? 0.0;
 
@@ -141,14 +160,12 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Future<void> _fetchFields() async {
-    if (!_isSystemOn) return; // Stop fetching fields if system is off
+    if (!_isSystemOn) return; 
     
     try {
-      // 1. Retrieve the saved JWT token
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('jwt_token') ?? '';
 
-      // 2. Attach it to the GET request
       final response = await http.get(
         Uri.parse('${AppConfig.baseUrl}/get_fields'),
         headers: {'Authorization': 'Bearer $token'},
@@ -464,7 +481,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Future<void> _fetchSensorData() async {
-    // Early exit: Prevent any fetching if the system is turned off
     if (!_isSystemOn) return; 
 
     try {
@@ -546,6 +562,26 @@ class _SensorsScreenState extends State<SensorsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text("Failed to communicate with pump controller")),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateShadeControl(bool deploy) async {
+    setState(() {
+      isShadeDeployed = deploy;
+    });
+
+    try {
+      await http.post(
+        Uri.parse('${AppConfig.baseUrl}/control/shade'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'shade': deploy}),
+      );
+    } catch (e) {
+      if (mounted && SettingsScreen.pushNotificationsEnabled.value) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to communicate with shade controller".tr)),
         );
       }
     }
@@ -850,12 +886,13 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   Widget _buildSystemPowerCard(bool isDark, bool isDay) {
     return BouncingButton(
-      onTap: () {
+      onTap: () async {
+        final prefs = await SharedPreferences.getInstance();
         setState(() {
           _isSystemOn = !_isSystemOn;
         });
+        await prefs.setBool('system_on', _isSystemOn);
 
-        // Trigger an immediate fetch so the UI is instantly responsive upon turning on
         if (_isSystemOn) {
           _fetchSensorData();
           _fetchLiveFlowData();
@@ -999,77 +1036,89 @@ class _SensorsScreenState extends State<SensorsScreen> {
   }
 
   Widget _buildShadeControlCard(bool isDark, bool isDay) {
+    bool isAutoMode = !_shadeOverride; 
+
     return BouncingButton(
       onTap: () {
-        if (!_shadeOverride) {
-          setState(() {
-            _shadeOverride = true;
-          });
+        if (isAutoMode) {
+          if (SettingsScreen.pushNotificationsEnabled.value) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Auto-Shade is ON in Settings. Manual control disabled.".tr),
+                backgroundColor: Colors.orangeAccent.shade400,
+              ),
+            );
+          }
+          return;
         }
-        _updatePumpControl(_pumpMode, _pump1State, _pump2State, !isShadeDeployed, isSprinklerActive);
+
+        _updateShadeControl(!isShadeDeployed);
       },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        padding: const EdgeInsets.all(20),
-        decoration: isShadeDeployed 
-            ? BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)],
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6EE7B7).withOpacity(0.6),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 8),
+      child: Opacity(
+        opacity: isAutoMode ? 0.5 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          padding: const EdgeInsets.all(20),
+          decoration: isShadeDeployed 
+              ? BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFA7F3D0), Color.fromARGB(255, 144, 202, 179)],
                   ),
-                ],
-              ) 
-            : _glassCardDecoration(isDark),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              "FARM SHADE".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isShadeDeployed ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
-                letterSpacing: 0.5,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF34D399).withOpacity(0.5), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6EE7B7).withOpacity(0.6),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ) 
+              : _glassCardDecoration(isDark),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                "FARM SHADE".tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isShadeDeployed ? const Color(0xFF064E3B) : (isDark ? Colors.grey.shade300 : Colors.grey.shade700),
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            const Spacer(),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isShadeDeployed ? const Color(0xFF022C22) : (isDark ? Colors.grey.shade800 : Colors.white),
-                boxShadow: isShadeDeployed ? [BoxShadow(color: const Color(0xFF022C22).withOpacity(0.2), blurRadius: 10)] : [],
+              const Spacer(),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isShadeDeployed ? const Color(0xFF022C22) : (isDark ? Colors.grey.shade800 : Colors.white),
+                  boxShadow: isShadeDeployed ? [BoxShadow(color: const Color(0xFF022C22).withOpacity(0.2), blurRadius: 10)] : [],
+                ),
+                child: Icon(
+                  Icons.roofing_rounded,
+                  size: 36,
+                  color: isShadeDeployed ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+                ),
               ),
-              child: Icon(
-                Icons.roofing_rounded,
-                size: 36,
-                color: isShadeDeployed ? Colors.white : (isDark ? Colors.grey.shade400 : Colors.grey.shade500),
+              const Spacer(),
+              Text(
+                isShadeDeployed ? "DEPLOYED".tr : "RETRACTED".tr,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: isShadeDeployed ? const Color(0xFF064E3B) : Theme.of(context).textTheme.bodyLarge!.color,
+                ),
               ),
-            ),
-            const Spacer(),
-            Text(
-              isShadeDeployed ? "DEPLOYED".tr : "RETRACTED".tr,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: isShadeDeployed ? const Color(0xFF064E3B) : Theme.of(context).textTheme.bodyLarge!.color,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1462,7 +1511,6 @@ class _SensorsScreenState extends State<SensorsScreen> {
     double lightValue = double.tryParse(_sensorLight) ?? 0.0;
     String chargeStatus = "Not Charging".tr;
     
-    // Battery charging solely based on direct LDR reading thresholds
     if (lightValue >= 1500) {
       chargeStatus = "Fast Charging".tr;
     } else if (lightValue >= 300) {
@@ -1743,6 +1791,7 @@ class _SensorsScreenState extends State<SensorsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final hour = DateTime.now().hour;
     final isDay = hour >= 6 && hour < 18;
