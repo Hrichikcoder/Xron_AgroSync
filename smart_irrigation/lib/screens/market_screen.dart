@@ -1528,6 +1528,16 @@ class _MarketScreenState extends State<MarketScreen> with AutomaticKeepAliveClie
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "* Disclaimer : This data represents predictive value and estimated trends, not real-time price or guarantees profit.".tr,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade500,
+                                            fontStyle: FontStyle.italic,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                     Row(

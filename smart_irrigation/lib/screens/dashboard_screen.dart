@@ -492,7 +492,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               GestureDetector(
                 onTap: () {
                   openEditProfileNotifier.value = true;
-                  _onItemTapped(3); 
+                  _onItemTapped(4); 
                 },
                 child: Container(
                   margin: const EdgeInsets.symmetric(vertical: 8),

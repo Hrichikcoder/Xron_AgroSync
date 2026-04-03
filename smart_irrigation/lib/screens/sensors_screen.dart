@@ -12,6 +12,7 @@ import '../widgets/fade_in_slide.dart';
 import '../core/app_config.dart';
 import 'settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/globals.dart'; // <-- Add this import
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({super.key});
@@ -712,14 +713,22 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "Hi Hrichik,",
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w900,
-              color: Theme.of(context).textTheme.bodyLarge!.color,
-              letterSpacing: -0.5,
-            ),
+          ValueListenableBuilder<String>(
+            valueListenable: currentUserName,
+            builder: (context, userName, child) {
+              // Extract just the first name for a casual greeting
+              final firstName = userName.split(' ').first;
+              
+              return Text(
+                "Hi $firstName,",
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  color: Theme.of(context).textTheme.bodyLarge!.color,
+                  letterSpacing: -0.5,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 4),
           Text(
@@ -1030,11 +1039,26 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
               ),
             ],
           ),
+          const SizedBox(height: 8), // Added spacing
+          // --- NEW: Soil Type Row ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Soil Type:".tr,
+                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8)),
+              ),
+              Text(
+                _selectedField != null ? "Loamy".tr : "--", // Currently hardcoded for UI purposes
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
-
+  
   Widget _buildShadeControlCard(bool isDark, bool isDay) {
     bool isAutoMode = !_shadeOverride; 
 
