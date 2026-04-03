@@ -1347,7 +1347,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
 
   Widget _buildDepthCard(bool isDark) {
     double rawDepth = double.tryParse(_sensorDepth) ?? 0.0;
-    double depthPercent = ((4095 - rawDepth) / 4095) * 100;
+    double depthPercent = ((rawDepth) / 4095) * 100;
     depthPercent = depthPercent.clamp(0, 100);
     bool depthDisabled = disabledSensors.contains('depth');
 

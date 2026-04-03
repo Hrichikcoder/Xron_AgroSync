@@ -15,10 +15,10 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
   bool isLoading = true;
   List<dynamic> communityData = [];
 
-  String? selectedState = "West Bengal";
-  String? selectedMarket;
+  // Navigation & Filter State
   String? selectedCrop;
-  String selectedTimeframe = "7 Days"; // Changed default to 7 Days for quick view
+  String? selectedMarket;
+  String selectedTimeframe = "7 Days"; 
 
   final List<String> timeframes = ["7 Days", "1 Month", "6 Months", "1 Year"];
 
@@ -35,12 +35,7 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
         final data = json.decode(response.body);
         setState(() {
           communityData = data['community_markets'] ?? [];
-          if (communityData.isNotEmpty) {
-            selectedCrop = communityData[0]['crop'];
-            if (communityData[0]['markets'].isNotEmpty) {
-              selectedMarket = communityData[0]['markets'][0]['market'];
-            }
-          }
+          // Do not auto-select crop/market here so the list view shows first
           isLoading = false;
         });
       }
@@ -73,33 +68,162 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  // ==================================================
+  // VIEW 1: MASTER LIST (CROWDSOURCED SCREENSHOT VIEW)
+  // ==================================================
+  Widget _buildMarketList(bool isDark) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: communityData.length,
+      itemBuilder: (context, index) {
+        final cropGroup = communityData[index];
+        final String cropName = cropGroup['crop'];
+        final List<dynamic> markets = cropGroup['markets'];
 
-    // Derive dropdown lists dynamically
-    List<String> crops = communityData.map((e) => e['crop'].toString()).toList();
-    List<dynamic> marketsData = [];
-    if (selectedCrop != null) {
-      final cropData = communityData.firstWhere((e) => e['crop'] == selectedCrop, orElse: () => null);
-      if (cropData != null) marketsData = cropData['markets'] ?? [];
-    }
-    List<String> markets = marketsData.map((e) => e['market'].toString()).toList();
+        return Container(
+          margin: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      cropName.isNotEmpty ? cropName[0] : '', 
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(cropName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: markets.map((m) => _buildMarketCard(m, cropName, isDark)).toList(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMarketCard(dynamic market, String cropName, bool isDark) {
+    // Extract today's logic (last entry in history array)
+    final history = market['history'] as List<dynamic>? ?? [];
+    final today = history.isNotEmpty ? history.last : null;
     
-    // Fetch raw history for selected market
-    List<dynamic> rawHistory = [];
-    if (selectedMarket != null && marketsData.isNotEmpty) {
-      final marketItem = marketsData.firstWhere((e) => e['market'] == selectedMarket, orElse: () => null);
-      if (marketItem != null) rawHistory = marketItem['history'] ?? [];
-    }
+    double avg = today != null ? (today['price'] as num).toDouble() : 0.0;
+    double minPrice = today != null ? (today['min'] as num).toDouble() : 0.0;
+    double maxPrice = today != null ? (today['max'] as num).toDouble() : 0.0;
 
-    // --- DATA AGGREGATION LOGIC ---
+    // Calculate Day-over-Day percentage change if we have at least 2 days of data
+    double pctChange = 0.0;
+    if (history.length >= 2) {
+      double yesterdayAvg = (history[history.length - 2]['price'] as num).toDouble();
+      if (yesterdayAvg > 0) {
+        pctChange = ((avg - yesterdayAvg) / yesterdayAvg) * 100;
+      }
+    }
+    bool isUp = pctChange > 0;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedCrop = cropName;
+          selectedMarket = market['market'];
+        });
+      },
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.02), blurRadius: 8, offset: const Offset(0, 4))
+          ]
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(market['market'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 12),
+            Text("₹${avg.toStringAsFixed(2)}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.amber)),
+            Text("Avg / 10kg", style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text("Min: ₹${minPrice.toStringAsFixed(2)} | Max: ₹${maxPrice.toStringAsFixed(2)}", style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.check_circle, size: 12, color: Colors.green.shade400),
+                    const SizedBox(width: 4),
+                    Text("4 Verified", style: TextStyle(color: Colors.green.shade400, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                if (pctChange != 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isUp ? Colors.blueAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4)
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(isUp ? Icons.arrow_upward : Icons.arrow_downward, size: 10, color: isUp ? Colors.blueAccent : Colors.redAccent),
+                        Text("${pctChange.abs().toStringAsFixed(1)}%", style: TextStyle(color: isUp ? Colors.blueAccent : Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  )
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================================================
+  // VIEW 2: ANALYTICS DETAIL (GRAPH & STATS)
+  // ==================================================
+  Widget _buildAnalyticsDetail(bool isDark) {
+    // 1. Fetch raw history for selected crop & market
+    List<dynamic> marketsData = [];
+    final cropData = communityData.firstWhere((e) => e['crop'] == selectedCrop, orElse: () => null);
+    if (cropData != null) marketsData = cropData['markets'] ?? [];
+    
+    List<dynamic> rawHistory = [];
+    final marketItem = marketsData.firstWhere((e) => e['market'] == selectedMarket, orElse: () => null);
+    if (marketItem != null) rawHistory = marketItem['history'] ?? [];
+
+    // 2. Data Aggregation Logic (Retained exactly from your original setup)
     DateTime now = DateTime.now();
     DateTime currentStart;
     DateTime prevStart;
     
     if (selectedTimeframe == '7 Days') {
-      currentStart = now.subtract(const Duration(days: 6)); // 6 days ago + today = 7 days
+      currentStart = now.subtract(const Duration(days: 6)); 
       prevStart = now.subtract(const Duration(days: 13));
     } else if (selectedTimeframe == '1 Month') {
       currentStart = now.subtract(const Duration(days: 29));
@@ -107,7 +231,7 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
     } else if (selectedTimeframe == '6 Months') {
       currentStart = now.subtract(const Duration(days: 179));
       prevStart = now.subtract(const Duration(days: 359));
-    } else { // 1 Year
+    } else { 
       currentStart = now.subtract(const Duration(days: 364));
       prevStart = now.subtract(const Duration(days: 729));
     }
@@ -117,7 +241,6 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
 
     for (var item in rawHistory) {
       DateTime dt = DateTime.parse(item['date'] + "T00:00:00Z");
-      // Add a small buffer to the end date to ensure today is included
       if (dt.isAfter(currentStart.subtract(const Duration(hours: 1))) && dt.isBefore(now.add(const Duration(days: 1)))) {
         currentDataRaw.add(item);
       } else if (dt.isAfter(prevStart.subtract(const Duration(hours: 1))) && dt.isBefore(currentStart)) {
@@ -160,160 +283,124 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
       chartData.sort((a, b) => a['date'].compareTo(b['date']));
     }
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
-        title: Text(
-          "Market Analytics",
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 24),
-        ),
-      ),
-      body: isLoading
-          ? const Center(child: AgroPulseLoader(message: "Compiling Analytics..."))
-          : communityData.isEmpty
-              ? Center(child: Text("No community data found.", style: TextStyle(color: Colors.grey.shade500)))
-              : ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    return WillPopScope(
+      onWillPop: () async {
+        setState(() { selectedMarket = null; selectedCrop = null; });
+        return false; // Prevent full screen exit, just return to list view
+      },
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        children: [
+          // Header Row with Back Button
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back_ios_new, size: 20, color: isDark ? Colors.white : Colors.black87),
+                onPressed: () => setState(() { selectedMarket = null; selectedCrop = null; }),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- THE INTERACTIVE LINE CHART CARD ---
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 15, offset: const Offset(0, 8))],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05),
-                                child: Text(selectedCrop?[0] ?? '', style: TextStyle(fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87)),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(selectedCrop ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          
-                          // Dropdown Filters Row
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _buildDropdown(selectedState ?? '', ["West Bengal"], (v) => setState(() => selectedState = v), isDark),
-                                const SizedBox(width: 8),
-                                _buildDropdown(selectedMarket ?? '', markets, (v) => setState(() => selectedMarket = v), isDark),
-                                const SizedBox(width: 8),
-                                _buildDropdown(selectedCrop ?? '', crops, (v) {
-                                  setState(() {
-                                    selectedCrop = v;
-                                    final newCropData = communityData.firstWhere((e) => e['crop'] == v, orElse: () => null);
-                                    if (newCropData != null && newCropData['markets'].isNotEmpty) {
-                                      selectedMarket = newCropData['markets'][0]['market'];
-                                    } else {
-                                      selectedMarket = null;
-                                    }
-                                  });
-                                }, isDark),
-                                const SizedBox(width: 8),
-                                _buildDropdown(selectedTimeframe, timeframes, (v) => setState(() => selectedTimeframe = v!), isDark),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          
-                          // Custom Line Chart
-                          if (chartData.isEmpty)
-                            SizedBox(height: 200, child: Center(child: Text("Not enough history for this timeframe", style: TextStyle(color: Colors.grey.shade500))))
-                          else
-                            SizedBox(
-                              height: 220,
-                              width: double.infinity,
-                              child: CustomPaint(
-                                painter: LineChartPainter(
-                                  history: chartData, 
-                                  isDark: isDark, 
-                                  startDate: currentStart, 
-                                  endDate: now, 
-                                  timeframe: selectedTimeframe
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // --- PREVIOUS PERIOD ANALYSIS CARD ---
-                    if (selectedCrop != null)
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.history_rounded, size: 18, color: Colors.amber.shade600),
-                                    const SizedBox(width: 8),
-                                    Text("Previous Period Analysis", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
-                                  ],
-                                ),
-                                if (prevDataRaw.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isUp ? Colors.blueAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(isUp ? Icons.arrow_upward : Icons.arrow_downward, size: 12, color: isUp ? Colors.blueAccent.shade400 : Colors.redAccent.shade400),
-                                        const SizedBox(width: 4),
-                                        Text("${pctChange.abs().toStringAsFixed(1)}%", style: TextStyle(color: isUp ? Colors.blueAccent.shade400 : Colors.redAccent.shade400, fontWeight: FontWeight.bold, fontSize: 12)),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text("Data from the preceding $selectedTimeframe", style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 20),
-                            
-                            if (prevDataRaw.isEmpty)
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text("No data recorded for the previous period.", style: TextStyle(color: Colors.grey.shade500)),
-                              )
-                            else
-                              Row(
-                                children: [
-                                  Expanded(child: _buildStatBox("Average", "₹${prevAvg.round()}", Colors.blueAccent.shade400, isDark)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _buildStatBox("Max Peak", "₹${prevMax.round()}", Colors.green.shade500, isDark)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: _buildStatBox("Min Drop", "₹${prevMin.round()}", Colors.redAccent.shade400, isDark)),
-                                ],
-                              )
-                          ],
-                        ),
-                      )
+                    Text(selectedMarket ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                    Text(selectedCrop ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold, fontSize: 12)),
                   ],
                 ),
+              ),
+              _buildDropdown(selectedTimeframe, timeframes, (v) => setState(() => selectedTimeframe = v!), isDark),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // The Interactive Line Chart Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.2 : 0.03), blurRadius: 15, offset: const Offset(0, 8))],
+            ),
+            child: chartData.isEmpty
+              ? SizedBox(height: 220, child: Center(child: Text("Not enough history for this timeframe", style: TextStyle(color: Colors.grey.shade500))))
+              : SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: LineChartPainter(
+                      history: chartData, 
+                      isDark: isDark, 
+                      startDate: currentStart, 
+                      endDate: now, 
+                      timeframe: selectedTimeframe
+                    ),
+                  ),
+                ),
+          ),
+          const SizedBox(height: 24),
+
+          // Previous Period Analysis Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.history_rounded, size: 18, color: Colors.amber.shade600),
+                        const SizedBox(width: 8),
+                        Text("Previous Period Analysis", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Theme.of(context).textTheme.bodyLarge!.color)),
+                      ],
+                    ),
+                    if (prevDataRaw.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isUp ? Colors.blueAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(isUp ? Icons.arrow_upward : Icons.arrow_downward, size: 12, color: isUp ? Colors.blueAccent.shade400 : Colors.redAccent.shade400),
+                            const SizedBox(width: 4),
+                            Text("${pctChange.abs().toStringAsFixed(1)}%", style: TextStyle(color: isUp ? Colors.blueAccent.shade400 : Colors.redAccent.shade400, fontWeight: FontWeight.bold, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text("Data from the preceding $selectedTimeframe", style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                
+                if (prevDataRaw.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text("No data recorded for the previous period.", style: TextStyle(color: Colors.grey.shade500)),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(child: _buildStatBox("Average", "₹${prevAvg.round()}", Colors.blueAccent.shade400, isDark)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildStatBox("Max Peak", "₹${prevMax.round()}", Colors.green.shade500, isDark)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildStatBox("Min Drop", "₹${prevMin.round()}", Colors.redAccent.shade400, isDark)),
+                    ],
+                  )
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 
@@ -334,10 +421,36 @@ class _LiveCommunityMarketScreenState extends State<LiveCommunityMarketScreen> {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      // Only show the main App Bar when on the master list
+      appBar: selectedMarket == null ? AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        title: Text(
+          "Real-Time Crowdsourced Data",
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w900, fontSize: 20),
+        ),
+      ) : null,
+      body: isLoading
+          ? const Center(child: AgroPulseLoader(message: "Fetching Markets..."))
+          : communityData.isEmpty
+              ? Center(child: Text("No community data found.", style: TextStyle(color: Colors.grey.shade500)))
+              : selectedMarket == null 
+                  ? _buildMarketList(isDark) 
+                  : _buildAnalyticsDetail(isDark),
+    );
+  }
 }
 
 // ==================================================
-// FIXED X-AXIS LINE CHART PAINTER
+// FIXED X-AXIS LINE CHART PAINTER (UNCHANGED)
 // ==================================================
 class LineChartPainter extends CustomPainter {
   final List<dynamic> history;
