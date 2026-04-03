@@ -70,11 +70,23 @@ class _AuthScreenState extends State<AuthScreen> {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
 
-    if (phone.length < 10 || name.isEmpty || email.isEmpty) {
+    // 1. Check mandatory fields (Name and Phone only)
+    if (phone.length < 10 || name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
+        const SnackBar(content: Text('Please provide your Name and Phone Number')),
       );
       return;
+    }
+
+    // 2. Validate email syntax ONLY if it is provided
+    if (email.isNotEmpty) {
+      final bool emailValid = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+      if (!emailValid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid email address (e.g., name@domain.com)')),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -86,7 +98,7 @@ class _AuthScreenState extends State<AuthScreen> {
         body: json.encode({
           'phone': phone,
           'name': name,
-          'email': email,
+          'email': email, // this will pass an empty string if left blank
         }),
       );
 
@@ -115,7 +127,6 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() => _isLoading = false);
     }
   }
-
   Widget _buildTextField({
     required String label,
     required String hint,
@@ -354,7 +365,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             FadeInSlide(
                               index: 3,
                               child: _buildTextField(
-                                label: 'Email Address',
+                                label: 'Email Address (Optional)',
                                 hint: 'e.g. farmer@agrosync.com',
                                 icon: Icons.email_rounded,
                                 controller: _emailController,

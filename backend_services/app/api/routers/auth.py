@@ -104,7 +104,7 @@ async def send_otp(payload: PhonePayload, background_tasks: BackgroundTasks, db:
     redis_key = f"otp:{payload.phone}"
     redis_client.setex(redis_key, 300, otp)
     
-    message = f"Your IntelliFarm verification code is: {otp}. It will expire in 5 minutes."
+    message = f"Your AgroSync login code is: {otp}. It will expire in 5 minutes."
     background_tasks.add_task(send_textbee_sms, payload.phone, message)
     
     return {"status": "success", "message": "OTP sent successfully"}
