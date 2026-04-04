@@ -897,7 +897,7 @@ class _CropDoctorScreenState extends State<CropDoctorScreen> {
                                   controller: _currentCropController,
                                   style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 16),
                                   decoration: InputDecoration(
-                                    hintText: "Search crop...".tr,
+                                    hintText: "Enter crop name you are currently farming...".tr,
                                     hintStyle: TextStyle(color: Colors.grey.shade500),
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                                     border: InputBorder.none,

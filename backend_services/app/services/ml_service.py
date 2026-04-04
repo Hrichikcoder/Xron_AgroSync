@@ -14,6 +14,9 @@ except Exception as e:
     print(f"Failed to load ML model: {e}")
 
 def predict_water_requirement(temperature, humidity, soil_moisture, ldr, rain_level, area_cm2):
+    
+    rf_model = joblib.load(MODEL_PATH)
+
     if rf_model is None:
         return 500.0  # Fallback target volume in mL if model fails
         
@@ -26,7 +29,7 @@ def predict_water_requirement(temperature, humidity, soil_moisture, ldr, rain_le
         current_moisture_pct = max(0.0, min(100.0, raw_pct))
 
         # 2. Define static field parameters           
-        target_moisture_pct = 75.0 
+        target_moisture_pct = 95.0 
 
         # 3. Create the initial DataFrame with the correct names
         features = pd.DataFrame([{

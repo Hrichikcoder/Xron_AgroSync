@@ -31,6 +31,7 @@ void checkBackendOverride() {
         
         manualShade = doc["shade"] | false;
         shadeOverride = doc["shade_override"] | false;
+        targetVolume = doc["target_volume"] | 500.0; 
       }
     }
     http.end();

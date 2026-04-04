@@ -12,7 +12,7 @@ import '../widgets/fade_in_slide.dart';
 import '../core/app_config.dart';
 import 'settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/globals.dart'; // <-- Add this import
+import '../core/globals.dart'; 
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({super.key});
@@ -61,6 +61,11 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
   String _sunrise = "--:--";
   String _sunset = "--:--";
   String _locationName = "Locating...";
+  
+  // --- NEW: Dynamic Weather State Variables ---
+  String _realWeatherDesc = "--";
+  IconData _weatherIcon = Icons.wb_sunny_rounded;
+  Color _weatherIconColor = Colors.yellowAccent.shade400;
 
   List<Map<String, dynamic>> _waterFlowHistory = [];
 
@@ -220,12 +225,10 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
 
   BoxDecoration _greenCardDecoration(bool isDark, bool isDay) {
     return BoxDecoration(
-      gradient: LinearGradient(
+      gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: isDay
-            ? [const Color(0xFF22C55E), const Color(0xFF15803D)]
-            : [const Color(0xFF047857), const Color(0xFF064E3B)],
+        colors: [Color(0xFF047857), Color(0xFF064E3B)],
       ),
       borderRadius: BorderRadius.circular(24),
       border: Border.all(
@@ -234,7 +237,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
       ),
       boxShadow: [
         BoxShadow(
-          color: (isDay ? const Color(0xFF15803D) : const Color(0xFF064E3B)).withOpacity(isDark ? 0.3 : 0.2),
+          color: const Color(0xFF064E3B).withOpacity(isDark ? 0.3 : 0.2),
           blurRadius: 25,
           spreadRadius: -5,
           offset: const Offset(0, 10),
@@ -317,6 +320,54 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
     final ampm = date.hour >= 12 ? 'PM' : 'AM';
     final min = date.minute.toString().padLeft(2, '0');
     return "${date.day}/${date.month}/${date.year} $hour:$min $ampm";
+  }
+
+  // --- NEW: Map Weather Code to Human Readable Status ---
+  void _updateWeatherCondition(int code, int isDayNum) {
+    bool isDaytime = isDayNum == 1;
+    String desc = "Clear";
+    IconData icon = isDaytime ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded;
+    Color iconCol = isDaytime ? Colors.yellowAccent.shade400 : Colors.teal.shade100;
+
+    if (code == 0) {
+      desc = isDaytime ? "Sunny & Clear" : "Clear Night";
+    } else if (code == 1 || code == 2) {
+      desc = "Partly Cloudy";
+      icon = isDaytime ? Icons.cloud_queue_rounded : Icons.nights_stay_rounded;
+      iconCol = Colors.white70;
+    } else if (code == 3) {
+      desc = "Overcast";
+      icon = Icons.cloud_rounded;
+      iconCol = Colors.grey.shade300;
+    } else if (code == 45 || code == 48) {
+      desc = "Foggy";
+      icon = Icons.foggy;
+      iconCol = Colors.grey.shade400;
+    } else if (code >= 51 && code <= 57) {
+      desc = "Drizzle";
+      icon = Icons.grain_rounded;
+      iconCol = Colors.lightBlueAccent;
+    } else if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) {
+      desc = "Rain";
+      icon = Icons.water_drop_rounded;
+      iconCol = Colors.blueAccent.shade100;
+    } else if (code >= 71 && code <= 86) {
+      desc = "Snow";
+      icon = Icons.ac_unit_rounded;
+      iconCol = Colors.white;
+    } else if (code >= 95 && code <= 99) {
+      desc = "Thunderstorm";
+      icon = Icons.thunderstorm_rounded;
+      iconCol = Colors.amberAccent.shade100;
+    }
+
+    if (mounted) {
+      setState(() {
+        _realWeatherDesc = desc;
+        _weatherIcon = icon;
+        _weatherIconColor = iconCol;
+      });
+    }
   }
 
   void _showWaterFlowHistory() {
@@ -405,8 +456,9 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
 
   Future<void> _fetchWeatherData(double lat, double lon) async {
     try {
+      // --- UPDATED: Added weather_code and is_day to the API Request ---
       final url = Uri.parse(
-          'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&daily=sunrise,sunset&timezone=auto');
+          'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code,is_day&daily=sunrise,sunset&timezone=auto');
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -419,6 +471,11 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
             _realHumidity = "${current['relative_humidity_2m']}%";
             _realPrecipitation = "${current['precipitation']} mm";
             _realWind = "${current['wind_speed_10m']} km/h";
+
+            // Parse newly added weather_code
+            int wCode = current['weather_code'] ?? 0;
+            int isDayApi = current['is_day'] ?? 1;
+            _updateWeatherCondition(wCode, isDayApi);
 
             if (daily != null &&
                 daily['sunrise'] != null &&
@@ -716,9 +773,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
           ValueListenableBuilder<String>(
             valueListenable: currentUserName,
             builder: (context, userName, child) {
-              // Extract just the first name for a casual greeting
               final firstName = userName.split(' ').first;
-              
               return Text(
                 "Hi $firstName,",
                 style: TextStyle(
@@ -803,9 +858,10 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
                 builder: (context, val, child) {
                   return Transform.scale(
                     scale: val,
+                    // --- UPDATED: Dynamic icon and color ---
                     child: Icon(
-                      isDay ? Icons.wb_sunny_rounded : Icons.nights_stay_rounded,
-                      color: isDay ? Colors.yellowAccent.shade400 : Colors.teal.shade100,
+                      _weatherIcon,
+                      color: _weatherIconColor,
                       size: 56,
                     ),
                   );
@@ -825,8 +881,9 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // --- UPDATED: Dynamic weather description ---
                   Text(
-                    isDay ? "Sunny & Clear".tr : "Clear Night".tr,
+                    _realWeatherDesc.tr,
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.white.withOpacity(0.9),
@@ -1039,8 +1096,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
               ),
             ],
           ),
-          const SizedBox(height: 8), // Added spacing
-          // --- NEW: Soil Type Row ---
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1049,7 +1105,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
                 style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8)),
               ),
               Text(
-                _selectedField != null ? "Loamy".tr : "--", // Currently hardcoded for UI purposes
+                _selectedField != null ? "Loamy".tr : "--", 
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
               ),
             ],
@@ -1535,10 +1591,10 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
     double lightValue = double.tryParse(_sensorLight) ?? 0.0;
     String chargeStatus = "Not Charging".tr;
     
-    if (lightValue >= 1500) {
+    if (lightValue >= 2000) {
       chargeStatus = "Fast Charging".tr;
     } else if (lightValue >= 300) {
-      chargeStatus = "Slow Charging".tr;
+      chargeStatus = "Charging".tr;
     } else {
       chargeStatus = "Not Charging".tr;
     }
