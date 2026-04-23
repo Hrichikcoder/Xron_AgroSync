@@ -106,7 +106,7 @@ async def send_otp(payload: PhonePayload, background_tasks: BackgroundTasks, db:
     
     message = f"Your AgroSync login code is: {otp}. It will expire in 5 minutes."
     background_tasks.add_task(send_textbee_sms, payload.phone, message)
-    
+    print(otp)
     return {"status": "success", "message": "OTP sent successfully"}
 
 @router.post("/verify-otp")
