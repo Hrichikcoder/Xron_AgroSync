@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../core/translations.dart';
 import '../widgets/bouncing_button.dart';
 import '../widgets/fade_in_slide.dart';
@@ -39,7 +40,8 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
   Set<String> disabledSensors = {};
 
   Timer? _timer;
-  Timer? _flowTimer;
+  WebSocketChannel? _channel;
+  
   String _sensorTemperature = "28.7";
   String _sensorHumidity = "63";
   String _sensorSoilMoisture = "45";
@@ -62,7 +64,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
   String _sunset = "--:--";
   String _locationName = "Locating...";
   
-  // --- NEW: Dynamic Weather State Variables ---
   String _realWeatherDesc = "--";
   IconData _weatherIcon = Icons.wb_sunny_rounded;
   Color _weatherIconColor = Colors.yellowAccent.shade400;
@@ -83,22 +84,14 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
     _initLocationAndWeather();
     _fetchSensorData();
     _fetchLiveFlowData();
+    _initWebSocket();
     
     _timer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(seconds: 10),
       (timer) {
         _syncSettings(); 
         if (_isSystemOn) {
-          _fetchSensorData();
           _fetchFields(); 
-        }
-      },
-    );
-    _flowTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (timer) {
-        if (_isSystemOn) {
-          _fetchLiveFlowData();
         }
       },
     );
@@ -107,8 +100,63 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
   @override
   void dispose() {
     _timer?.cancel();
-    _flowTimer?.cancel();
+    _channel?.sink.close();
     super.dispose();
+  }
+
+  void _initWebSocket() {
+    final wsUrl = AppConfig.baseUrl.replaceFirst('http', 'ws') + '/sensors/ws';
+    _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+    
+    _channel!.stream.listen(
+      (message) {
+        if (!_isSystemOn) return;
+        final data = json.decode(message);
+        
+        if (mounted) {
+          setState(() {
+            if (data['type'] == 'sensor_update') {
+              _sensorTemperature = data['temperature']?.toString() ?? _sensorTemperature;
+              
+              String rawHumStr = data['humidity']?.toString() ?? _sensorHumidity;
+              double parsedHum = double.tryParse(rawHumStr) ?? 0.0;
+              _sensorHumidity = parsedHum > 100.0 ? "95" : rawHumStr;
+              
+              _sensorSoilMoisture = data['soil_moisture']?.toString() ?? _sensorSoilMoisture;
+              _sensorLight = data['ldr']?.toString() ?? _sensorLight;
+              _sensorRain = data['rain_level']?.toString() ?? _sensorRain;
+              _sensorDepth = data['depth']?.toString() ?? _sensorDepth;
+              
+              if (data['last_cycle_volume'] != null) {
+                String newLcv = data['last_cycle_volume'].toString();
+                double nLcv = double.tryParse(newLcv) ?? 0.0;
+                double oLcv = double.tryParse(_lastCycleVolume) ?? 0.0;
+
+                if (nLcv > 0 && nLcv != oLcv) {
+                  _waterFlowHistory.insert(0, {'amount': nLcv, 'time': DateTime.now()});
+                }
+                _lastCycleVolume = newLcv;
+              }
+              
+              _sensorWaterFlow = data['water_flow']?.toString() ?? _sensorWaterFlow;
+              _sensorWaterFlowRate = data['flow_rate']?.toString() ?? _sensorWaterFlowRate;
+              _motorRunning = (double.tryParse(_sensorWaterFlowRate) ?? 0.0) > 0;
+
+            } else if (data['type'] == 'flow_update') {
+              _sensorWaterFlow = data['water_flow']?.toString() ?? _sensorWaterFlow;
+              _sensorWaterFlowRate = data['flow_rate']?.toString() ?? _sensorWaterFlowRate;
+              _motorRunning = (double.tryParse(_sensorWaterFlowRate) ?? 0.0) > 0;
+            }
+          });
+        }
+      },
+      onError: (error) {
+        Future.delayed(const Duration(seconds: 5), _initWebSocket);
+      },
+      onDone: () {
+        Future.delayed(const Duration(seconds: 5), _initWebSocket);
+      },
+    );
   }
 
   Future<void> _loadPersistedState() async {
@@ -161,7 +209,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         body: json.encode({'area_acres': areaAcres}),
       );
     } catch (e) {
-      debugPrint("Failed to update active field: $e");
     }
   }
 
@@ -201,7 +248,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         }
       }
     } catch (e) {
-      debugPrint("Error fetching fields for Dropdown: $e");
     }
   }
 
@@ -322,7 +368,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
     return "${date.day}/${date.month}/${date.year} $hour:$min $ampm";
   }
 
-  // --- NEW: Map Weather Code to Human Readable Status ---
   void _updateWeatherCondition(int code, int isDayNum) {
     bool isDaytime = isDayNum == 1;
     String desc = "Clear";
@@ -456,7 +501,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
 
   Future<void> _fetchWeatherData(double lat, double lon) async {
     try {
-      // --- UPDATED: Added weather_code and is_day to the API Request ---
       final url = Uri.parse(
           'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,weather_code,is_day&daily=sunrise,sunset&timezone=auto');
       final response = await http.get(url);
@@ -472,7 +516,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
             _realPrecipitation = "${current['precipitation']} mm";
             _realWind = "${current['wind_speed_10m']} km/h";
 
-            // Parse newly added weather_code
             int wCode = current['weather_code'] ?? 0;
             int isDayApi = current['is_day'] ?? 1;
             _updateWeatherCondition(wCode, isDayApi);
@@ -498,7 +541,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         }
       }
     } catch (e) {
-      debugPrint("Weather API error: $e");
     }
   }
 
@@ -534,7 +576,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         }
       }
     } catch (e) {
-      debugPrint("Failed to load history: $e");
     }
   }
 
@@ -589,7 +630,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         }
       }
     } catch (e) {
-      debugPrint("Error fetching sensor data: $e");
     }
   }
 
@@ -678,7 +718,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
         }),
       );
     } catch (e) {
-      debugPrint("Toggle sensor error: $e");
     }
   }
 
@@ -858,7 +897,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
                 builder: (context, val, child) {
                   return Transform.scale(
                     scale: val,
-                    // --- UPDATED: Dynamic icon and color ---
                     child: Icon(
                       _weatherIcon,
                       color: _weatherIconColor,
@@ -881,7 +919,6 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
                     ),
                   ),
                   const SizedBox(height: 4),
-                  // --- UPDATED: Dynamic weather description ---
                   Text(
                     _realWeatherDesc.tr,
                     style: TextStyle(

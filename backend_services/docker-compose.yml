@@ -10,27 +10,17 @@ services:
       - ./dataset:/code/dataset
       - ./ml_models:/code/ml_models
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=app_db
-      - POSTGRES_HOST=db
+      # host.docker.internal connects to your local PostgreSQL 18!
+      # Assuming your password is 'postgresql' based on your .env file
+      - POSTGRES_URL=postgresql://postgres:postgresql@host.docker.internal:5432/agrosync_db
       - REDIS_URL=redis://redis:6379/0
       - INFLUX_URL=http://influxdb:8086
     depends_on:
-      - db
+      # Removed 'db' from here
       - redis
       - influxdb
 
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=agrosync_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # The "db" block is completely removed
 
   redis:
     image: redis:alpine
@@ -45,8 +35,17 @@ services:
       - "8086:8086"
     volumes:
       - influxdb_data:/var/lib/influxdb2
-
+    env_file:
+      - .env
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin0611 
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+      
 volumes:
-  postgres_data:
+  # Removed postgres_data volume
   redis_data:
   influxdb_data:

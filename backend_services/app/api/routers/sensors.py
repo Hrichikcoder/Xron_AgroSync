@@ -1,22 +1,59 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from influxdb_client import Point, WritePrecision
 from app.schemas.payloads import SensorData, FlowData, SensorToggle
 from app.db.influx import write_api, query_api
 from app.core.config import settings
 import app.core.state as state
 from app.services.ml_service import predict_water_requirement
+
 router = APIRouter(prefix="/api/sensors", tags=["Sensors"])
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 @router.post("/flow_update")
 async def update_flow(data: FlowData):
     state.current_water_flow = data.water_flow
     state.current_flow_rate = data.flow_rate
+    
+    await manager.broadcast({
+        "type": "flow_update",
+        "water_flow": data.water_flow,
+        "flow_rate": data.flow_rate
+    })
+    
     return {"message": "Flow data updated"}
 
 @router.post("/update")
 async def update_sensors(data: SensorData):
     try:
-
         state.live_sensor_data.update({
             "temperature": data.temperature,
             "humidity": data.humidity,
@@ -31,34 +68,62 @@ async def update_sensors(data: SensorData):
         state.current_water_flow = getattr(data, 'water_flow', 0.0)
         state.current_flow_rate = getattr(data, 'flow_rate', 0.0)
         
-        point = (
-            Point("environment")
-            .tag("node_id", data.node_id)
-            .field("temperature", data.temperature)
-            .field("humidity", data.humidity)
-            .field("ldr", data.ldr)
-            .field("soil_moisture", data.soil_moisture)
-            .field("rain_level", data.rain_level)
-            .field("depth", data.depth_level)
-            .field("water_flow", data.water_flow)
-            .field("flow_rate", getattr(data, 'flow_rate', 0.0))
-            .field("last_cycle_volume", getattr(data, 'last_cycle_volume', 0.0))
-            .time(None, WritePrecision.NS)
-        )
-        write_api.write(bucket=settings.INFLUXDB_BUCKET, org=settings.INFLUXDB_ORG, record=point)
-        predicted_vol = predict_water_requirement(
-            temperature=data.temperature,
-            humidity=data.humidity,
-            soil_moisture=data.soil_moisture,
-            ldr=data.ldr,
-            rain_level=data.rain_level,
-            area_cm2=state.active_field_area_cm2
-        )
-        state.target_volume = predicted_vol
-        return {"message": "Data successfully written to InfluxDB", "predicted_volume": predicted_vol}
+        try:
+            point = (
+                Point("environment")
+                .tag("node_id", data.node_id)
+                .field("temperature", data.temperature)
+                .field("humidity", data.humidity)
+                .field("ldr", data.ldr)
+                .field("soil_moisture", data.soil_moisture)
+                .field("rain_level", data.rain_level)
+                .field("depth", data.depth_level)
+                .field("water_flow", getattr(data, 'water_flow', 0.0))
+                .field("flow_rate", getattr(data, 'flow_rate', 0.0))
+                .field("last_cycle_volume", getattr(data, 'last_cycle_volume', 0.0))
+                .time(None, WritePrecision.NS)
+            )
+            write_api.write(bucket=settings.INFLUXDB_BUCKET, org=settings.INFLUXDB_ORG, record=point)
+        except Exception as db_e:
+            print(f"InfluxDB Write Error: {db_e}")
+
+        predicted_vol = getattr(state, 'target_volume', 500.0)
+        try:
+            area = getattr(state, 'active_field_area_cm2', 40468564.2)
+            if area is None or area == 0:
+                area = 40468564.2
+
+            predicted_vol = predict_water_requirement(
+                temperature=data.temperature,
+                humidity=data.humidity,
+                soil_moisture=data.soil_moisture,
+                ldr=data.ldr,
+                rain_level=data.rain_level,
+                area_cm2=area
+            )
+            state.target_volume = predicted_vol
+        except Exception as ml_e:
+            print(f"ML Prediction Error: {ml_e}")
+
+        await manager.broadcast({
+            "type": "sensor_update",
+            "temperature": data.temperature,
+            "humidity": data.humidity,
+            "ldr": data.ldr,
+            "soil_moisture": data.soil_moisture,
+            "rain_level": data.rain_level,
+            "depth": data.depth_level,
+            "water_flow": getattr(data, 'water_flow', 0.0),
+            "flow_rate": getattr(data, 'flow_rate', 0.0),
+            "last_cycle_volume": getattr(data, 'last_cycle_volume', 0.0),
+            "predicted_volume": predicted_vol
+        })
+
+        return {"message": "Data processed", "predicted_volume": predicted_vol}
     
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write to database: {str(e)}")
+        print(f"Critical Route Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.get("/current")
 async def get_current_sensors(node_id: str = "esp32_zone_1"):
@@ -116,30 +181,21 @@ async def get_sensor_history(hours: int = 24, node_id: str = "esp32_zone_1"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to query history: {str(e)}")
 
-
 @router.get("/live_flow")
 async def get_live_flow():
-    # Reads the live data stored directly in RAM by the ESP32
     return {
         "water_flow": state.current_water_flow,
         "flow_rate": state.current_flow_rate
     }
 
-
 @router.get("/live")
 async def get_live_sensor_data():
-    """
-    Returns the absolute latest data from the ESP32 in RAM.
-    Used by the App's Diagnostics screen and Live Dashboards.
-    """
     return state.live_sensor_data
 
 @router.post("/toggle")
 async def toggle_sensor(data: SensorToggle):
-    # If state is 'off', is_disabled is True. Otherwise, False.
     is_disabled = (data.state == 'off')
     
-    # Map the incoming Flutter sensor name to our state variables
     if data.sensor == "soil_moisture":
         state.disable_soil_moisture = is_disabled
     elif data.sensor == "depth":
