@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/globals.dart';
 import 'screens/splash_screen.dart';
 import 'screens/market_model_screen.dart';
-
+import 'screens/ceaScreen.dart';
 class AppNotification {
   final String id;
   final String title;
@@ -68,6 +68,7 @@ class SmartIrrigationApp extends StatelessWidget {
                   home: const SplashScreen(),
                   routes: {
                     '/market-model': (context) => const MarketModelScreen(),
+                    '/cea': (context) => const CeaScreen(),
                   },
                 );
               },

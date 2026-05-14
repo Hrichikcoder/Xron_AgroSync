@@ -401,7 +401,7 @@ class _SensorsScreenState extends State<SensorsScreen> with AutomaticKeepAliveCl
       icon = Icons.ac_unit_rounded;
       iconCol = Colors.white;
     } else if (code >= 95 && code <= 99) {
-      desc = "Thunderstorm";
+      desc = "Cloudy";
       icon = Icons.thunderstorm_rounded;
       iconCol = Colors.amberAccent.shade100;
     }

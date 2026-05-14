@@ -91,7 +91,7 @@ def parse_speech(request: ParseSpeechRequest):
     try:
         # Use settings if available, fallback to os.environ for the API Key
         api_key = getattr(settings, "GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY"))
-        client = genai.Client(api_key="AIzaSyDF5xVMuFgh3_BK-VVeMqFsKBRsm63A04E") 
+        client = genai.Client(api_key="AIzaSyC-HhD72DgkkhpO3YakMIVwvUjUYoRRDkw") 
         
         prompt = f"""
         You are an agricultural data extractor. Extract the Crop Name, Market Name, and Price from the user's spoken text.

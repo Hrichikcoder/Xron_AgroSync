@@ -17,6 +17,8 @@ import 'community_screen.dart';
 
 // MODIFIED: Added this import to allow routing to the Overview
 import 'system_overview_screen.dart';
+// MODIFIED: Added this import to allow routing to the CeaScreen
+import 'ceaScreen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -446,6 +448,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const SystemOverviewScreen()),
+                  );
+                },
+              ),
+              // MODIFIED: Added this button to route to the CEA Screen
+              IconButton(
+                icon: Icon(
+                  Icons.biotech_rounded,
+                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+                ),
+                tooltip: 'CEA Screen',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CeaScreen()),
                   );
                 },
               ),

@@ -39,11 +39,11 @@ void setup() {
   shadeServo.setPeriodHertz(50);
   shadeServo.attach(SERVO_PIN, 500, 2400);
   shadeServo.write(0);
-  
+
   Serial.println("Step 2: Forcing Pumps to Initial OFF State...");
   digitalWrite(PUMP1_PIN, HIGH); 
   digitalWrite(PUMP2_PIN, HIGH);
-  digitalWrite(SPRINKLER_PIN, LOW);
+  digitalWrite(SPRINKLER_PIN, HIGH);
 
   Serial.println("Step 3: Connecting to WiFi...");
   WiFi.disconnect(true);
@@ -74,7 +74,6 @@ void loop() {
 
   if (currentMillis - lastFlowMillis >= 1000) {
     unsigned long currentPulses = 0;
-
     portENTER_CRITICAL(&mux);
     currentPulses = pulseCount;
     pulseCount = 0;
@@ -95,7 +94,7 @@ void loop() {
   int capValue = analogRead(CAP_SENSOR_PIN);
   
   if (disableSoil) capValue = 1500; 
-  if (disableDepth) depthValue = 2000; 
+  if (disableDepth) depthValue = 2000;
 
   if (currentMillis - lastOverrideCheck >= overrideInterval) {
     checkBackendOverride();
@@ -136,11 +135,10 @@ void loop() {
     lastShadeState = desiredShade;
   }
 
-  digitalWrite(SPRINKLER_PIN, manualSprinkler ? HIGH : LOW);
+  digitalWrite(SPRINKLER_PIN, manualSprinkler ? LOW : HIGH);
 
   if (currentMillis - lastEnvPrintTime >= envPrintInterval) {
     printEnvironmentSensors();
-
     float h = dht.readHumidity();
     float t = dht.readTemperature();
     int ldrValue = analogRead(LDR_PIN);
@@ -152,7 +150,7 @@ void loop() {
     }
     if (disableLdr) ldrValue = 1000;
     if (disableRain) rainValue = 4095;
-    
+
     sendSensorDataToBackend(t, h, ldrValue, capValue, rainValue, depthValue, currentVolume, currentFlowRate);
     lastEnvPrintTime = currentMillis;
   }

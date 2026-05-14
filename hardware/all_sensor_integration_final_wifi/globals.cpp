@@ -11,13 +11,13 @@ const char* overrideUrl = SECRET_OVERRIDE_URL;
 const char* notificationUrl = SECRET_NOTIFICATION_URL;
 
 // Define Pin Connections
-const int PUMP1_PIN = 13;
-const int PUMP2_PIN = 14;
+const int PUMP1_PIN = 18;
+const int PUMP2_PIN = 19;
 const int DEPTH_SENSOR_PIN = 34;
 const int CAP_SENSOR_PIN = 32; 
 const int FLOW_SENSOR_PIN = 27; 
 const int SERVO_PIN = 4;
-const int SPRINKLER_PIN = 25; 
+const int SPRINKLER_PIN = 21; 
 
 // Environmental Sensor Setup
 DHT dht(DHTPIN, DHTTYPE);

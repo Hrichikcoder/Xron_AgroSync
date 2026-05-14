@@ -16,8 +16,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 SECRET_KEY = getattr(settings, 'SECRET_KEY', "your_super_secret_key")
 ALGORITHM = "HS256"
 
-TEXTBEE_API_KEY = "d5420e5b-f4d3-469a-9003-d343de65c4a1"
-TEXTBEE_DEVICE_ID = "69c546b6c3538b609d13d100"
+TEXTBEE_API_KEY = "979a1945-504f-4d95-a988-dd62ecd8b364"
+TEXTBEE_DEVICE_ID = "69ec68fab5cd3ce4c73d7d71"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/verify-otp")
 class PhonePayload(BaseModel):

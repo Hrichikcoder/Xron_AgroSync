@@ -15,8 +15,6 @@ except Exception as e:
 
 def predict_water_requirement(temperature, humidity, soil_moisture, ldr, rain_level, area_cm2):
     
-    rf_model = joblib.load(MODEL_PATH)
-
     if rf_model is None:
         return 500.0  # Fallback target volume in mL if model fails
         

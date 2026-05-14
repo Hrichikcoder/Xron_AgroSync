@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key="AIzaSyBIuHK1vVgUW4o2KqMUuLnmdVHOh_CmVjU")
+client = genai.Client(api_key="AIzaSyC-HhD72DgkkhpO3YakMIVwvUjUYoRRDkw")
 
 router = APIRouter(tags=["Disease Prediction"])
 def clean_json_response(text: str) -> str:

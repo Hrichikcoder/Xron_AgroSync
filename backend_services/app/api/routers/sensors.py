@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from influxdb_client import Point, WritePrecision
-from app.schemas.payloads import SensorData, FlowData, SensorToggle
+from app.schemas.payloads import SensorData, FlowData, SensorToggle, CeaTargetPayload
 from app.db.influx import write_api, query_api
 from app.core.config import settings
 import app.core.state as state
@@ -208,3 +208,20 @@ async def toggle_sensor(data: SensorToggle):
         state.disable_rain_level = is_disabled
         
     return {"message": f"Sensor {data.sensor} disabled state set to {is_disabled}"}
+
+
+@router.post("/set_targets")
+async def set_cea_targets(data: CeaTargetPayload):
+    # Save targets to global state so your actuator logic can use them
+    state.cea_target_temp = data.target_temp
+    state.cea_target_humidity = data.target_humidity
+    
+    # Broadcast new targets to web socket clients if needed
+    await manager.broadcast({
+        "type": "target_update",
+        "crop": data.crop_name,
+        "temp": data.target_temp,
+        "humidity": data.target_humidity
+    })
+    
+    return {"message": "CEA targets updated successfully"}

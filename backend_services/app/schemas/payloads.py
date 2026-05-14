@@ -57,3 +57,10 @@ class RegisterPayload(BaseModel):
     name: str
     email: str
     otp: str
+
+class CeaTargetPayload(BaseModel):
+    crop_name: str
+    target_temp: float
+    target_humidity: float
+    target_light: float
+    mode: str = "auto"

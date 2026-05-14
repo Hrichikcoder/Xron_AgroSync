@@ -5,7 +5,7 @@ import pandas as pd
 import xgboost as xgb
 from math import radians, cos, sin, asin, sqrt
 from app.core.config import settings
-from app.services.data_loader import build_data_lake, merge_pipeline, normalize_crop_name
+from app.services.data_loader import normalize_crop_name
 from app.db.redis_client import set_cache, get_cache
 
 # Load Model once at startup
@@ -46,11 +46,9 @@ def get_real_market_features(target_crop):
     cached_df = get_cache(cache_key)
     
     if cached_df:
-        # If cache hit, load the dictionary/list directly into a DataFrame
         return pd.DataFrame(cached_df)
 
-    lake = build_data_lake(settings.DATASET_DIR)
-    df = merge_pipeline(lake)
+    df = pd.read_parquet("app/data/optimized_market_data.parquet")
     
     if df.empty: return pd.DataFrame()
         
@@ -66,9 +64,9 @@ def get_real_market_features(target_crop):
     target_crop = normalize_crop_name(target_crop)
     crop_df = df[df['Crop'] == target_crop].groupby('Market').tail(1).copy()
     
-    # Store as a list of dicts so redis_client.set_cache can dump it properly
     set_cache(cache_key, crop_df.to_dict(orient='records'), expire=1800) 
     return crop_df
+
 def recommend_real_markets(crop, farmer_lat, farmer_lon, transport_cost_per_km):
     try:
         expected_features = market_model.feature_names_in_

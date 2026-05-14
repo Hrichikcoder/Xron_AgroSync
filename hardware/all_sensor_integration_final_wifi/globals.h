@@ -19,6 +19,7 @@ extern const int FLOW_SENSOR_PIN;
 extern const int SERVO_PIN;
 extern const int SPRINKLER_PIN;
 
+// FIXED: Moved the standard DHT11 to pin 19 so it doesn't conflict with CEA on 26
 #define DHTPIN 26
 #define DHTTYPE DHT11
 extern DHT dht;
